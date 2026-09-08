@@ -43,4 +43,3 @@ Rules → Review → Export.
 The full request/response contract both sides were built against lives at
 [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md) — the definitive reference
 for endpoint shapes, field names, and status codes.
-# deid-project

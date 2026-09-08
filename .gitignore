@@ -1,0 +1,11 @@
+# OS / editor cruft (backend/ and frontend/ have their own .gitignore for
+# their respective toolchains — this one covers repo-wide concerns only).
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# Env files, wherever they end up.
+.env
+.env.*
+!.env.example
