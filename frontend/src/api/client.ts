@@ -2,6 +2,7 @@ import type {
   ApiErrorShape,
   ApplyRulesResponse,
   AuditResponse,
+  AuthResponse,
   Category,
   EntitiesResponse,
   EntityResponse,
@@ -10,6 +11,7 @@ import type {
   JobResponse,
   JobsResponse,
   DocumentPayload,
+  MeResponse,
   Mode,
   RuleResponse,
   RulesResponse,
@@ -33,10 +35,47 @@ export class ApiError extends Error {
   }
 }
 
+// ---- Auth token storage ----
+// Persisted so a page refresh doesn't lose the session. Read once at module
+// load; every subsequent change goes through setAuthToken so the in-memory
+// value and localStorage never drift apart.
+
+const TOKEN_KEY = 'deid_auth_token';
+
+function readStoredToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+let authToken: string | null = readStoredToken();
+
+export function getAuthToken(): string | null {
+  return authToken;
+}
+
+export function setAuthToken(token: string | null): void {
+  authToken = token;
+  try {
+    if (token) {
+      localStorage.setItem(TOKEN_KEY, token);
+    } else {
+      localStorage.removeItem(TOKEN_KEY);
+    }
+  } catch {
+    // localStorage unavailable (private mode, etc.) — session just won't survive a refresh.
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+  if (authToken) headers.set('Authorization', `Token ${authToken}`);
+
   let res: Response;
   try {
-    res = await fetch(`${BASE_URL}${path}`, init);
+    res = await fetch(`${BASE_URL}${path}`, { ...init, headers });
   } catch {
     throw new ApiError(0, 'Could not reach the server. Check your connection and try again.');
   }
@@ -49,6 +88,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       // response had no / invalid JSON body
     }
     const detail = body?.detail ?? `Request failed with status ${res.status}`;
+    if (res.status === 401 && path !== '/auth/login/') {
+      setAuthToken(null);
+      window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+    }
     throw new ApiError(res.status, detail, body);
   }
 
@@ -156,6 +199,24 @@ export function getAudit(jobId: number): Promise<AuditResponse> {
 
 export function exportJob(jobId: number, formats: ExportFormat[]): Promise<ExportResponse> {
   return request<ExportResponse>(`/jobs/${jobId}/export/`, json({ formats }));
+}
+
+// ---- Auth ----
+
+export function register(params: { name: string; username: string; password: string }): Promise<AuthResponse> {
+  return request<AuthResponse>('/auth/register/', json(params));
+}
+
+export function login(params: { username: string; password: string }): Promise<AuthResponse> {
+  return request<AuthResponse>('/auth/login/', json(params));
+}
+
+export function logout(): Promise<void> {
+  return request<void>('/auth/logout/', { method: 'POST' });
+}
+
+export function getMe(): Promise<MeResponse> {
+  return request<MeResponse>('/auth/me/');
 }
 
 /** Resolve a (possibly relative) file URL returned by the API against the API origin. */

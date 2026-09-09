@@ -138,3 +138,20 @@ export interface ApiErrorShape {
   detail: string;
   [key: string]: unknown;
 }
+
+// ---- Auth ----
+
+export interface AuthUser {
+  id: number;
+  username: string;
+  name: string;
+}
+
+export interface AuthResponse {
+  user: AuthUser;
+  token: string;
+}
+
+export interface MeResponse {
+  user: AuthUser;
+}

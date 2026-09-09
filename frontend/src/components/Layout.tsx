@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { useSyncExternalStore } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { getActiveJobSnapshot, getQueueCountSnapshot, subscribeActiveJob } from '../lib/activeJob';
+import { getAuthUserSnapshot, logout, subscribeAuth } from '../lib/auth';
 import { Toast } from './Toast';
 
 export function Layout() {
@@ -9,6 +10,12 @@ export function Layout() {
   const navigate = useNavigate();
   const activeJob = useSyncExternalStore(subscribeActiveJob, getActiveJobSnapshot);
   const queueCount = useSyncExternalStore(subscribeActiveJob, getQueueCountSnapshot);
+  const user = useSyncExternalStore(subscribeAuth, getAuthUserSnapshot);
+
+  async function onLogout() {
+    await logout();
+    navigate('/login', { replace: true });
+  }
 
   const path = location.pathname;
   const rulesPath = activeJob ? `/jobs/${activeJob.id}/rules` : null;
@@ -64,8 +71,10 @@ export function Layout() {
         <div className="nav-spacer" />
         <div className="nav-footer">
           <div className="nav-footer-label">Signed in as</div>
-          <div className="nav-footer-name">R. Okonkwo</div>
-          <div className="nav-footer-role">Privacy Officer</div>
+          <div className="nav-footer-name">{user?.name || user?.username}</div>
+          <button type="button" className="nav-logout-btn" onClick={onLogout}>
+            Log out
+          </button>
         </div>
       </nav>
       <main className="app-main">
