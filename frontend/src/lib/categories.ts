@@ -10,7 +10,10 @@ export interface CategoryMeta {
 // Order matches the canonical table in the API contract / the order the
 // /rules/ endpoint returns rows in.
 export const CATEGORY_ORDER: Category[] = [
+  'patient_name',
+  'physician_name',
   'name',
+  'facility',
   'geo',
   'date',
   'phone',
@@ -31,7 +34,20 @@ export const CATEGORY_ORDER: Category[] = [
 ];
 
 const META: Record<Category, CategoryMeta> = {
-  name: { category: 'name', label: 'Name', color: '#7C4DBC', cfr: '§164.514(b)(2)(i)(A)' },
+  patient_name: {
+    category: 'patient_name',
+    label: 'Patient name',
+    color: '#6A3FA0',
+    cfr: '§164.514(b)(2)(i)(A)',
+  },
+  physician_name: {
+    category: 'physician_name',
+    label: 'Physician / provider name',
+    color: '#9B6FD1',
+    cfr: '§164.514(b)(2)(i)(A)',
+  },
+  name: { category: 'name', label: 'Other person name', color: '#7C4DBC', cfr: '§164.514(b)(2)(i)(A)' },
+  facility: { category: 'facility', label: 'Facility / organization', color: '#3A7CA5', cfr: '' },
   geo: { category: 'geo', label: 'Geographic', color: '#2D6FB8', cfr: '§164.514(b)(2)(i)(B)' },
   date: { category: 'date', label: 'Date', color: '#B8792D', cfr: '§164.514(b)(2)(i)(C)' },
   phone: { category: 'phone', label: 'Telephone', color: '#1F8A70', cfr: '§164.514(b)(2)(i)(D)' },

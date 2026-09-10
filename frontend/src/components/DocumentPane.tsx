@@ -15,6 +15,7 @@ const BLOCK_CLASS: Record<DocumentBlock['type'], string> = {
   sub: 'doc-block-sub',
   h: 'doc-block-h',
   p: 'doc-block-p',
+  table_row: 'doc-block-table_row',
 };
 
 export function DocumentPane({

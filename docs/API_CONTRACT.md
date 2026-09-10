@@ -8,38 +8,52 @@ CORS is open for `http://localhost:5173` (Vite dev server).
 
 ```ts
 type Category =
-  | 'name' | 'geo' | 'date' | 'phone' | 'fax' | 'email' | 'ssn' | 'mrn'
-  | 'plan' | 'account' | 'license' | 'vehicle' | 'device' | 'url' | 'ip'
-  | 'biometric' | 'photo' | 'other';
+  | 'patient_name' | 'physician_name' | 'name' | 'facility' | 'geo' | 'date'
+  | 'phone' | 'fax' | 'email' | 'ssn' | 'mrn' | 'plan' | 'account'
+  | 'license' | 'vehicle' | 'device' | 'url' | 'ip' | 'biometric' | 'photo'
+  | 'other';
 
 type Mode = 'redact' | 'mask' | 'pseudo' | 'keep';
 
 type JobStatus = 'scanning' | 'in_review' | 'complete' | 'failed';
 ```
 
+`name` now means "other person name" (family members and anyone else who
+isn't the patient or a physician/provider) — `patient_name` and
+`physician_name` are split out as their own categories even though Safe
+Harbor's "Names" identifier covers all three the same way; the split is
+purely for reviewer clarity. `facility` (organization/institution name)
+isn't one of the 18 numbered Safe Harbor identifiers either, but is tracked
+the same way since it's routinely identifying alongside geographic
+subdivisions. Credit card numbers are detected but tagged under the
+existing `other` category rather than a dedicated one.
+
 Category metadata (label + accent color hex) the frontend should hardcode, keyed by the
 `category` string returned by the API — the backend does NOT send label/color inline on
 every entity, only on the `/rules/` endpoint (see below):
 
 ```
-name      Name                  #7C4DBC
-geo       Geographic            #2D6FB8
-date      Date                  #B8792D
-phone     Telephone             #1F8A70
-fax       Fax                   #1F8A70
-email     Email                 #1F8A70
-ssn       SSN                   #A4291F
-mrn       Medical record no.    #A4291F
-plan      Health plan no.       #A4291F
-account   Account no.           #8A5A1B
-license   Certificate / licence #8A5A1B
-vehicle   Vehicle identifier    #5B6770
-device    Device identifier     #5B6770
-url       URL                   #2D6FB8
-ip        IP address            #2D6FB8
-biometric Biometric             #7C4DBC
-photo     Full-face image       #7C4DBC
-other     Other identifier      #5B6770
+patient_name      Patient name              #6A3FA0
+physician_name    Physician / provider name #9B6FD1
+name              Other person name         #7C4DBC
+facility          Facility / organization   #3A7CA5
+geo               Geographic                #2D6FB8
+date              Date                      #B8792D
+phone             Telephone                 #1F8A70
+fax               Fax                       #1F8A70
+email             Email                     #1F8A70
+ssn               SSN                       #A4291F
+mrn               Medical record no.        #A4291F
+plan              Health plan no.           #A4291F
+account           Account no.               #8A5A1B
+license           Certificate / licence     #8A5A1B
+vehicle           Vehicle identifier        #5B6770
+device            Device identifier         #5B6770
+url               URL                       #2D6FB8
+ip                IP address                #2D6FB8
+biometric         Biometric                 #7C4DBC
+photo             Full-face image           #7C4DBC
+other             Other identifier          #5B6770
 ```
 
 Mode labels: redact="Redact", mask="Mask", pseudo="Pseudonymize", keep="Keep".
@@ -73,7 +87,7 @@ interface Entity {
   mode: Mode;
   confidence: number;    // 0..1
   page: number;          // 1-indexed
-  detector: string;      // "pattern" | "heuristic"
+  detector: string;      // "pattern" | "heuristic" | "context"
   block_index: number;   // index into DocumentPayload.blocks
 }
 
@@ -84,7 +98,10 @@ type BlockPart =
 interface DocumentBlock {
   index: number;
   page: number;
-  type: 'title' | 'sub' | 'h' | 'p';
+  type: 'title' | 'sub' | 'h' | 'p' | 'table_row';
+  source: 'text' | 'ocr';  // 'ocr' means this block came from the Tesseract
+                            // fallback for a page with no native text layer —
+                            // treat its entities as lower-reliability
   parts: BlockPart[];
 }
 

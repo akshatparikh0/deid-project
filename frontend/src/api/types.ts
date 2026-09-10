@@ -2,7 +2,10 @@
 // See API_CONTRACT.md (shared out-of-band with the backend team) for the source of truth.
 
 export type Category =
+  | 'patient_name'
+  | 'physician_name'
   | 'name'
+  | 'facility'
   | 'geo'
   | 'date'
   | 'phone'
@@ -51,7 +54,7 @@ export interface Entity {
   mode: Mode;
   confidence: number; // 0..1
   page: number; // 1-indexed
-  detector: string; // "pattern" | "heuristic"
+  detector: string; // "pattern" | "heuristic" | "context"
   block_index: number; // index into DocumentPayload.blocks
 }
 
@@ -60,7 +63,8 @@ export type BlockPart = { text: string } | { entity: string }; // entity `code`
 export interface DocumentBlock {
   index: number;
   page: number;
-  type: 'title' | 'sub' | 'h' | 'p';
+  type: 'title' | 'sub' | 'h' | 'p' | 'table_row';
+  source: 'text' | 'ocr'; // 'ocr' = Tesseract fallback for a page with no native text layer
   parts: BlockPart[];
 }
 

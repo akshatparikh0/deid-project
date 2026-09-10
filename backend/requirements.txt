@@ -4,3 +4,5 @@ django-cors-headers==4.9.0
 pdfplumber==0.11.10
 reportlab==5.0.1
 python-dotenv==1.0.1
+pytesseract==0.3.13
+Pillow==12.3.0

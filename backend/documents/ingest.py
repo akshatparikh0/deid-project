@@ -45,9 +45,18 @@ def run_ingestion(job, file_obj):
         for raw in raw_blocks:
             block = DocumentBlock.objects.create(
                 job=job, index=raw["index"], page=raw["page"],
-                type=raw["type"], text=raw["text"],
+                type=raw["type"], text=raw["text"], source=raw.get("source", "text"),
             )
-            for span in detect_spans(raw["text"]):
+            if raw.get("cells"):
+                spans = []
+                for cell in raw["cells"]:
+                    cell_text = raw["text"][cell["start"]:cell["end"]]
+                    for span in detect_spans(cell_text, column_header=cell["header"]):
+                        spans.append({**span, "start": span["start"] + cell["start"], "end": span["end"] + cell["start"]})
+            else:
+                spans = detect_spans(raw["text"])
+
+            for span in spans:
                 entity_seq += 1
                 value = raw["text"][span["start"]:span["end"]]
                 cache_key = (span["category"], value.lower())

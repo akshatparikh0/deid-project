@@ -1,17 +1,26 @@
 """
-The 18 HIPAA Safe Harbor identifier classes (45 CFR §164.514(b)(2)(i)) this
-tool detects and transforms. Order here is the canonical display order used
-by the /rules/ endpoint and mirrored by the frontend.
+The category classes this tool detects and transforms. Most map 1:1 onto the
+18 HIPAA Safe Harbor identifier classes (45 CFR §164.514(b)(2)(i)); "name" is
+split into patient_name/physician_name/name (other person) for reviewer
+clarity even though Safe Harbor's "Names" identifier covers all three the
+same way, and "facility" (organization/institution name) is tracked
+alongside "geo" since it's routinely treated as identifying alongside
+geographic subdivisions even though it isn't its own numbered identifier.
+Order here is the canonical display order used by the /rules/ endpoint and
+mirrored by the frontend.
 """
 
 CATEGORY_ORDER = [
-    "name", "geo", "date", "phone", "fax", "email", "ssn", "mrn", "plan",
-    "account", "license", "vehicle", "device", "url", "ip", "biometric",
-    "photo", "other",
+    "patient_name", "physician_name", "name", "facility", "geo", "date",
+    "phone", "fax", "email", "ssn", "mrn", "plan", "account", "license",
+    "vehicle", "device", "url", "ip", "biometric", "photo", "other",
 ]
 
 CATEGORY_META = {
-    "name":      {"label": "Name",                   "color": "#7C4DBC", "token": "[NAME]"},
+    "patient_name":   {"label": "Patient name",          "color": "#6A3FA0", "token": "[PATIENT_NAME]"},
+    "physician_name": {"label": "Physician / provider name", "color": "#9B6FD1", "token": "[PHYSICIAN]"},
+    "name":      {"label": "Other person name",      "color": "#7C4DBC", "token": "[NAME]"},
+    "facility":  {"label": "Facility / organization", "color": "#3A7CA5", "token": "[FACILITY]"},
     "geo":       {"label": "Geographic",              "color": "#2D6FB8", "token": "[LOCATION]"},
     "date":      {"label": "Date",                    "color": "#B8792D", "token": "[DATE]"},
     "phone":     {"label": "Telephone",                "color": "#1F8A70", "token": "[PHONE]"},
@@ -52,4 +61,10 @@ BLOCK_TYPE_CHOICES = [
     ("sub", "Subtitle"),
     ("h", "Heading"),
     ("p", "Paragraph"),
+    ("table_row", "Table row"),
+]
+
+BLOCK_SOURCE_CHOICES = [
+    ("text", "Text layer"),
+    ("ocr", "OCR"),
 ]

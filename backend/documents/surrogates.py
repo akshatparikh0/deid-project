@@ -30,11 +30,14 @@ def _seeded_int(key, modulus):
 def make_surrogate(category, value):
     key = f"{category}:{value.lower()}"
 
-    if category == "name":
+    if category in ("name", "patient_name", "physician_name"):
         first = _FIRST_NAMES[_seeded_int(key + "f", len(_FIRST_NAMES))]
         last = _LAST_NAMES[_seeded_int(key + "l", len(_LAST_NAMES))]
         suffix_match = re.search(r",?\s*(MD|RN|DO|NP|PA|MSW)\b", value)
         return f"{first} {last}" + (f", {suffix_match.group(1)}" if suffix_match else "")
+
+    if category == "facility":
+        return f"{_CITIES[_seeded_int(key + 'c', len(_CITIES))]} Medical Center"
 
     if category == "date":
         m = re.match(r"(\d{1,2})/(\d{1,2})/(\d{2,4})", value)

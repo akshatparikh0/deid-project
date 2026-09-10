@@ -741,6 +741,11 @@ button {
   font-family: var(--font-sans);
 }
 
+.doc-block-table_row {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
 /* ---- Review screen layout ---- */
 
 .review-toolbar {

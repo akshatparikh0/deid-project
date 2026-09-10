@@ -3,6 +3,7 @@ import hashlib
 from django.db import models
 
 from .categories import (
+    BLOCK_SOURCE_CHOICES,
     BLOCK_TYPE_CHOICES,
     CATEGORY_CHOICES,
     CATEGORY_META,
@@ -51,8 +52,9 @@ class DocumentBlock(models.Model):
     job = models.ForeignKey(Job, related_name="blocks", on_delete=models.CASCADE)
     index = models.PositiveIntegerField()
     page = models.PositiveIntegerField()
-    type = models.CharField(max_length=8, choices=BLOCK_TYPE_CHOICES, default="p")
+    type = models.CharField(max_length=9, choices=BLOCK_TYPE_CHOICES, default="p")
     text = models.TextField()
+    source = models.CharField(max_length=4, choices=BLOCK_SOURCE_CHOICES, default="text")
 
     class Meta:
         ordering = ["index"]

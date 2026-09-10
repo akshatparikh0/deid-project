@@ -22,7 +22,8 @@ def build_document_payload(job):
         if cursor < len(block.text):
             parts.append({"text": block.text[cursor:]})
         blocks_out.append({
-            "index": block.index, "page": block.page, "type": block.type, "parts": parts,
+            "index": block.index, "page": block.page, "type": block.type,
+            "source": block.source, "parts": parts,
         })
 
     return {
