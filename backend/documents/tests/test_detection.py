@@ -61,6 +61,47 @@ class NameSplitTests(SimpleTestCase):
         values = [v for v, c, _ in spans]
         self.assertNotIn("Seattle, WA", values)
 
+    def test_label_immediately_followed_by_another_label_not_captured(self):
+        # "Patient ID:" is itself a field label, not a cue introducing a
+        # name — the name-body capture must not eat "ID" (or any other
+        # label-shaped word) as if it were the patient's name.
+        spans = _categories("Patient ID: is a 72 y.o. female who presents for a follow-up.")
+        self.assertEqual([v for v, c, _ in spans if c == "patient_name"], [])
+
+    def test_heading_after_patient_cue_not_captured(self):
+        spans = _categories("Patient Active Problem List\nDiagnosis\n* Hyperlipidemia")
+        self.assertEqual([v for v, c, _ in spans if c == "patient_name"], [])
+
+    def test_repeated_relation_word_not_captured_as_name(self):
+        # Two OCR'd "Sister" lines in a row must not let the second
+        # "Sister" be read as the first one's name.
+        spans = _categories("Sister\nSister")
+        self.assertEqual(spans, [])
+
+    def test_diagnosis_followed_by_relation_word_not_captured(self):
+        # A family-history table flattened by OCR into "Problem Relation"
+        # pairs per line (e.g. "Arthritis Sister") must not read as a name.
+        spans = _categories("Arthritis Sister")
+        self.assertEqual([v for v, c, _ in spans if c == "name"], [])
+
+
+class LabelWordBoundaryTests(SimpleTestCase):
+    """The labelled-number patterns (mrn/plan/account/license/vehicle/
+    device) must match the whole label word, not just a prefix of a longer,
+    unrelated word — e.g. "Plan" inside "Planning"."""
+
+    def test_plan_does_not_match_inside_planning(self):
+        spans = _categories("Planning now to have a nerve release as pain is more severe")
+        self.assertEqual([v for v, c, _ in spans if c == "plan"], [])
+
+    def test_real_plan_id_still_detected(self):
+        spans = _categories("Health Plan ID: A1234567")
+        self.assertIn(("A1234567", "plan", "pattern"), spans)
+
+    def test_account_does_not_match_inside_accountable(self):
+        spans = _categories("She was accountable for her own care.")
+        self.assertEqual([v for v, c, _ in spans if c == "account"], [])
+
 
 class FacilityTests(SimpleTestCase):
     def test_facility_label(self):

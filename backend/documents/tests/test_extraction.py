@@ -1,6 +1,7 @@
 import os
 import shutil
 import unittest
+from unittest.mock import patch
 
 from django.test import SimpleTestCase
 
@@ -74,3 +75,31 @@ class OcrFallbackTests(SimpleTestCase):
         full_text = " ".join(b["text"] for b in blocks)
         self.assertIn("Whitcombe", full_text)
         self.assertIn("4471002", full_text)
+
+
+class SparseNativeTextTriggersOcrTests(SimpleTestCase):
+    """redacted_consult_note.pdf has, on several pages, only a handful of
+    genuine text runs (a few label tokens) plus a spurious near-full-page
+    "table" pdfplumber detects from border lines — while the actual visible
+    page content has no selectable characters at all. A naive "is there any
+    text / any table" check would wrongly treat these pages as already
+    handled and never attempt OCR. Stubs `_ocr_page` so this is testable
+    without the tesseract binary."""
+
+    def test_sparse_pages_fall_back_to_ocr_when_it_finds_more(self):
+        fake_text = " ".join(["word"] * 200)
+        with patch("documents.extraction._ocr_page", return_value=fake_text):
+            _, blocks = extract_blocks(_fixture("redacted_consult_note.pdf"))
+        sources_by_page = {}
+        for b in blocks:
+            sources_by_page.setdefault(b["page"], set()).add(b["source"])
+        for page, sources in sources_by_page.items():
+            self.assertEqual(sources, {"ocr"}, f"page {page} did not fall back to OCR")
+        # The spurious near-full-page tables on pages 2-4 must not survive
+        # once OCR supersedes that page's native extraction.
+        self.assertFalse(any(b["type"] == "table_row" for b in blocks))
+
+    def test_sparse_native_text_kept_when_ocr_unavailable(self):
+        with patch("documents.extraction._ocr_page", return_value=""):
+            _, blocks = extract_blocks(_fixture("redacted_consult_note.pdf"))
+        self.assertTrue(all(b["source"] == "text" for b in blocks))

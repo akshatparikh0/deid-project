@@ -12,8 +12,15 @@ into the same paragraph text badly scrambles row/column adjacency (e.g. a
 reading order) — PHI detection needs cells kept row-aligned to reason about
 what a bare, unlabelled value in a "Name" or "MRN" column means.
 
-Pages with no usable text layer (scanned/image-only PDFs) are rasterized and
-run through Tesseract OCR as a fallback; see `_ocr_page`.
+Pages with little or no usable native text are rasterized and run through
+Tesseract OCR as a fallback; see `_ocr_page`. "Little" is deliberately not
+"zero": a page can have a handful of genuine text runs (a stray label, a
+border-line "table" pdfplumber mistook for real cells) while the actual
+visible content is vector-drawn glyphs or a background scan with no
+selectable characters at all — checking for a realistic word count instead
+of just "any text at all" is what catches that case. OCR only replaces the
+page's text if it finds *more* content than native extraction did, so a
+genuinely short page never gets worse by attempting OCR.
 """
 import re
 import shutil
@@ -23,7 +30,7 @@ import pdfplumber
 _BLANK_RUN = re.compile(r"\n\s*\n+")
 _HEADING_LIKE = re.compile(r"^[A-Z0-9][A-Za-z0-9 ,.'/#&:-]{0,70}$")
 
-_MIN_NATIVE_WORDS = 3  # below this, treat the page as having no usable text layer
+_MIN_NATIVE_WORDS = 25  # below this, also try OCR and keep whichever is more complete
 
 _TESSERACT_AVAILABLE = shutil.which("tesseract") is not None
 
@@ -172,11 +179,21 @@ def extract_blocks(file_obj):
                 except Exception as exc:  # pragma: no cover - pdfplumber internal failure
                     raise ExtractionError(f"Could not read page {page_number}: {exc}") from exc
 
+                native_words = len(page_text.split()) + sum(
+                    len(cell_text.split()) for table in tables for row in table for cell_text, _ in row
+                )
                 source = "text"
-                if len(page_text.split()) < _MIN_NATIVE_WORDS and not tables:
+                if native_words < _MIN_NATIVE_WORDS:
+                    # A handful of stray text runs (a couple of labels, a
+                    # border-line "table" pdfplumber mistook for real cells)
+                    # shouldn't count as "this page has usable text" — a real
+                    # page of prose has far more than a couple dozen words.
+                    # Only actually switch to OCR if it turns up more content
+                    # than what native extraction found, never less.
                     ocr_text = _ocr_page(page)
-                    if ocr_text.strip():
+                    if len(ocr_text.split()) > native_words:
                         page_text = ocr_text
+                        tables = []
                         source = "ocr"
 
                 for paragraph in _split_page_into_paragraphs(page_text):

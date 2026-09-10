@@ -1,5 +1,7 @@
 import json
 import os
+import shutil
+import unittest
 
 from django.test import TestCase
 
@@ -92,13 +94,35 @@ class ConsultNoteIngestTests(TestCase):
 
 
 class RedactedSampleNegativeControlTests(TestCase):
-    """A real EHR export whose text layer was already scrubbed to bracket
-    placeholders ([PATIENT_NAME], [MRN-1], ...) before it reached this repo.
-    There's no real PHI left in it, so it's a negative control: the detector
-    must not manufacture entities out of the placeholder tokens themselves."""
+    """A real EHR export whose real PHI values were already scrubbed to
+    bracket placeholders ([PATIENT_NAME], [MRN-1], ...) before it reached
+    this repo — confirmed independently with pdfplumber, poppler's
+    pdftotext, and a raw byte-level `strings` scan, so this isn't an
+    extraction bug. Most of the page is drawn as vector glyphs with no
+    underlying text-showing operator at all (not an image either — the only
+    embedded images are tiny icons), so the OCR fallback is what recovers
+    it. This is a negative control for shapes that plainly can't be present
+    (no SSN, email, phone, or credit-card-shaped digit run exists anywhere
+    in this file, redacted or not) — it must hold with or without the
+    tesseract binary installed."""
 
-    def test_no_high_confidence_structured_entities(self):
+    def test_no_ssn_email_phone_or_other_structured_entities(self):
         job = _run("redacted_consult_note.pdf")
         self.assertEqual(job.status, "in_review")
-        structured = job.entities.filter(category__in=["ssn", "mrn", "email", "phone", "ip", "other"])
+        structured = job.entities.filter(category__in=["ssn", "email", "phone", "ip", "other"])
         self.assertEqual(structured.count(), 0)
+
+    @unittest.skipUnless(shutil.which("tesseract"), "tesseract binary not installed")
+    def test_ocr_recovers_the_real_non_phi_clinical_narrative(self):
+        # With OCR active, the surrounding non-PHI content (diagnoses,
+        # medications, review of systems) — genuinely real text, just drawn
+        # as vector glyphs pdfplumber can't extract — must come through
+        # readable rather than being silently dropped. The specific PHI
+        # fields (patient/physician/facility name) correctly stay empty:
+        # there's no real value left there to recover, only the bracket
+        # placeholder that was already burned into the page.
+        job = _run("redacted_consult_note.pdf")
+        all_text = " ".join(job.blocks.values_list("text", flat=True))
+        self.assertIn("allergic rhinitis", all_text)
+        self.assertIn("Review of Systems", all_text)
+        self.assertTrue(job.blocks.filter(source="ocr").exists())

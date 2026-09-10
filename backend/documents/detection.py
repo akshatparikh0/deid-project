@@ -52,7 +52,23 @@ _NAME_STOPWORDS = {
     "Consult", "Family", "Past", "Surgical", "History", "Physical", "Exam",
     "Review", "Systems", "Assessment", "Objective", "Subjective", "Problem",
     "Active", "Preoperative", "Postoperative", "Progress", "Vital", "Chief",
-    "Present", "Illness",
+    "Present", "Illness", "ID",
+    # More section/field labels seen in real EHR exports (problem/allergy/
+    # medication/social-history sections) that otherwise read as a name.
+    "List", "Diagnosis", "Prior", "Outpatient", "Sig", "Dispense", "Refill",
+    "Tobacco", "Substance", "Topics", "Allergies", "Allergen", "Reactions",
+    "Reaction", "Capillary", "Mental", "Comment", "Laterality", "Procedure",
+    "Visit", "Orders", "Reason", "Location", "Facility", "Anesthesia",
+}
+# Relation words never legitimately appear as (part of) the name that
+# follows one — e.g. two OCR'd "Sister" lines in a row must not let the
+# second "Sister" be read as the first one's name. Checked case-
+# insensitively against the *last* word of a candidate name span, since
+# that's where a jumbled table row's next column tends to land (e.g.
+# "Arthritis Sister" from a flattened Problem/Relation pair).
+_RELATION_WORDS = {
+    "mother", "father", "sister", "brother", "grandmother", "grandfather",
+    "son", "daughter", "spouse", "aunt", "uncle", "cousin",
 }
 _COMMA_RIGHT_STOPWORDS = _STATE_ABBR_SET | {
     "MD", "RN", "DO", "NP", "PA", "MSW", "Jr", "Sr", "III", "II", "Inc",
@@ -97,12 +113,12 @@ _PATTERNS = [
         rf"(?:,\s*[A-Z][A-Za-z]+(?:\s[A-Z][A-Za-z]+)?,?\s*(?:{_STATE_ABBR})\s*\d{{5}}(?:-\d{{4}})?)?",
     ), 0.93, "pattern"),
     ("geo", re.compile(rf"\b[A-Z][A-Za-z]+(?:\s[A-Z][A-Za-z]+)?,\s*(?:{_STATE_ABBR})\s+\d{{5}}(?:-\d{{4}})?\b"), 0.9, "pattern"),
-    ("mrn", re.compile(r"\b(?:MRN|Medical\s+Record\s+(?:No\.?|Number|#))\s*[:#]?\s*([A-Za-z0-9-]{4,})", re.I), 0.95, "pattern"),
-    ("plan", re.compile(r"\b(?:Plan|Health\s+Plan)\s*(?:ID|No\.?|Number|#)?\s*[:#]?\s*([A-Za-z0-9-]{4,})", re.I), 0.9, "pattern"),
-    ("account", re.compile(r"\b(?:Account|Acct)\s*(?:No\.?|Number|#)?\s*[:#]?\s*([A-Za-z0-9-]{4,})", re.I), 0.88, "pattern"),
-    ("license", re.compile(r"\b(?:Licen[cs]e|Certificate)\s*(?:No\.?|Number|#)?\s*[:#]?\s*([A-Za-z0-9-]{4,})", re.I), 0.88, "pattern"),
-    ("vehicle", re.compile(r"\b(?:Plate|Vehicle|License\s+Plate)\s*(?:No\.?|Number|#)?\s*[:#]?\s*([A-Za-z0-9-]{4,8})", re.I), 0.85, "pattern"),
-    ("device", re.compile(r"\b(?:Device|Serial|Pump)\s*(?:No\.?|Number|S/N|#)?\s*[:#]?\s*([A-Za-z0-9-]{4,})", re.I), 0.85, "pattern"),
+    ("mrn", re.compile(r"\b(?:MRN|Medical\s+Record\s+(?:No\.?|Number|#))\b\s*[:#]?\s*([A-Za-z0-9-]{4,})", re.I), 0.95, "pattern"),
+    ("plan", re.compile(r"\b(?:Plan|Health\s+Plan)\b\s*(?:ID|No\.?|Number|#)?\s*[:#]?\s*([A-Za-z0-9-]{4,})", re.I), 0.9, "pattern"),
+    ("account", re.compile(r"\b(?:Account|Acct)\b\s*(?:No\.?|Number|#)?\s*[:#]?\s*([A-Za-z0-9-]{4,})", re.I), 0.88, "pattern"),
+    ("license", re.compile(r"\b(?:Licen[cs]e|Certificate)\b\s*(?:No\.?|Number|#)?\s*[:#]?\s*([A-Za-z0-9-]{4,})", re.I), 0.88, "pattern"),
+    ("vehicle", re.compile(r"\b(?:Plate|Vehicle|License\s+Plate)\b\s*(?:No\.?|Number|#)?\s*[:#]?\s*([A-Za-z0-9-]{4,8})", re.I), 0.85, "pattern"),
+    ("device", re.compile(r"\b(?:Device|Serial|Pump)\b\s*(?:No\.?|Number|S/N|#)?\s*[:#]?\s*([A-Za-z0-9-]{4,})", re.I), 0.85, "pattern"),
     ("facility", re.compile(r"\b(?:Facility|Location|Clinic|Site)\s*[:\-]\s*([A-Z][A-Za-z0-9 &,.'\-]{2,60})"), 0.88, "pattern"),
     ("facility", re.compile(
         rf"\b([A-Z][A-Za-z&'\-]+(?:\s+(?:of|the|and)?\s*[A-Z][A-Za-z&'\-]+){{0,4}}\s+(?:{_FACILITY_SUFFIX}))\b"
@@ -234,6 +250,17 @@ def detect_spans(text, column_header=None):
             end = start + len(text[start:end].rstrip())  # name-body groups can trail whitespace
             if end <= start:
                 continue
+            if category in ("patient_name", "physician_name", "name"):
+                # The name-body capture is shape-based ("one to four
+                # capitalized words"), so a cue immediately followed by an
+                # unrelated label word ("Patient ID:", "Patient Active
+                # Problem List") reads the same as a real name — filter it
+                # the same way the bare heuristics below do.
+                words = text[start:end].split()
+                first_word = words[0].rstrip(".,")
+                last_word = words[-1].rstrip(".,").lower()
+                if first_word in _NAME_STOPWORDS or last_word in _RELATION_WORDS:
+                    continue
             cat = category
             conf = confidence
             if category == "phone":
@@ -278,8 +305,10 @@ def detect_spans(text, column_header=None):
 
     for m in _GENERIC_NAME.finditer(text):
         start, end = m.span(1)
-        first_word = text[start:end].split()[0].rstrip(".")
-        if first_word in _NAME_STOPWORDS:
+        words = text[start:end].split()
+        first_word = words[0].rstrip(".")
+        last_word = words[-1].rstrip(".").lower()
+        if first_word in _NAME_STOPWORDS or last_word in _RELATION_WORDS:
             continue
         # Skip parenthetical asides like "(Family Medicine)" or "(Right Knee)"
         # — a bare two-capitalized-word phrase in parens next to a name is
