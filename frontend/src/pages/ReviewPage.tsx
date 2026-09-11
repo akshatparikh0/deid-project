@@ -11,7 +11,7 @@ import {
   updateEntity,
 } from '../api/client';
 import type { Category, DocumentPayload, Entity, Job, Mode } from '../api/types';
-import { DocumentPane } from '../components/DocumentPane';
+import { PageImagePane } from '../components/PageImagePane';
 import { EntityInspector } from '../components/EntityInspector';
 import { ExportModal } from '../components/ExportModal';
 import { StatusBadge } from '../components/StatusBadge';
@@ -67,9 +67,13 @@ export function ReviewPage() {
 
   useEffect(load, [jobId]);
 
-  const entitiesByCode = useMemo(() => {
-    const map = new Map<string, Entity>();
-    entities.forEach((e) => map.set(e.code, e));
+  const entitiesByPage = useMemo(() => {
+    const map = new Map<number, Entity[]>();
+    entities.forEach((e) => {
+      const list = map.get(e.page);
+      if (list) list.push(e);
+      else map.set(e.page, [e]);
+    });
     return map;
   }, [entities]);
 
@@ -281,11 +285,11 @@ export function ReviewPage() {
 
       <div className="review-grid" style={{ gridTemplateColumns: gridColumns }}>
         {showOriginal && (
-          <DocumentPane
+          <PageImagePane
             title="Original — PHI highlighted"
             variant="original"
-            blocks={doc.blocks}
-            entitiesByCode={entitiesByCode}
+            pages={doc.pages}
+            entitiesByPage={entitiesByPage}
             ruleTokenByCategory={ruleTokens}
             selectedCode={selectedCode}
             onSelect={setSelectedCode}
@@ -293,11 +297,11 @@ export function ReviewPage() {
           />
         )}
         {showDeid && (
-          <DocumentPane
+          <PageImagePane
             title="De-identified output"
             variant="deidentified"
-            blocks={doc.blocks}
-            entitiesByCode={entitiesByCode}
+            pages={doc.pages}
+            entitiesByPage={entitiesByPage}
             ruleTokenByCategory={ruleTokens}
             selectedCode={selectedCode}
             onSelect={setSelectedCode}

@@ -33,7 +33,7 @@ class EntitySerializer(serializers.ModelSerializer):
         model = Entity
         fields = [
             "id", "code", "category", "value", "surrogate_value", "mode",
-            "confidence", "page", "detector", "block_index",
+            "confidence", "page", "detector", "block_index", "boxes",
         ]
 
     block_index = serializers.IntegerField(source="block.index", read_only=True)

@@ -40,12 +40,19 @@ class Job(models.Model):
         return f"{self.code} ({self.filename})"
 
     def purge_source_file(self):
-        """Delete the uploaded source PDF from disk once it's no longer needed
-        for editing — de-identified output and the audit trail don't need it."""
+        """Delete the uploaded source PDF, and the rendered page preview
+        images derived from it, from disk once they're no longer needed for
+        editing — de-identified output and the audit trail don't need
+        either. Page images show the full original page content (that's the
+        point, for the Review screen), so they get purged on the same
+        schedule as the source PDF itself, not kept around indefinitely."""
         if self.file:
             self.file.delete(save=False)
             self.file = None
             self.save(update_fields=["file"])
+        for page in self.page_images.all():
+            page.image.delete(save=False)
+        self.page_images.all().delete()
 
 
 class DocumentBlock(models.Model):
@@ -63,6 +70,24 @@ class DocumentBlock(models.Model):
         ]
 
 
+class Page(models.Model):
+    """A rendered preview image of one page of the uploaded PDF, in the same
+    coordinate space (PDF points, top-left origin) as Entity.boxes — this is
+    what the Review screen's original/de-identified panes actually render,
+    with entity boxes drawn on top positioned as percentages of width/height."""
+    job = models.ForeignKey(Job, related_name="page_images", on_delete=models.CASCADE)
+    number = models.PositiveIntegerField()
+    width = models.FloatField()
+    height = models.FloatField()
+    image = models.ImageField(upload_to="page_images/")
+
+    class Meta:
+        ordering = ["number"]
+        constraints = [
+            models.UniqueConstraint(fields=["job", "number"], name="unique_page_per_job"),
+        ]
+
+
 class Entity(models.Model):
     job = models.ForeignKey(Job, related_name="entities", on_delete=models.CASCADE)
     block = models.ForeignKey(DocumentBlock, related_name="entities", on_delete=models.CASCADE)
@@ -76,6 +101,7 @@ class Entity(models.Model):
     detector = models.CharField(max_length=16, default="pattern")
     start_in_block = models.PositiveIntegerField()
     end_in_block = models.PositiveIntegerField()
+    boxes = models.JSONField(default=list, blank=True)  # [{x0, top, x1, bottom}, ...] in PDF points, one per line
 
     class Meta:
         ordering = ["block__index", "start_in_block"]

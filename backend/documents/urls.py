@@ -6,6 +6,7 @@ urlpatterns = [
     path("jobs/", views.JobListCreateView.as_view()),
     path("jobs/<int:job_id>/", views.JobDetailView.as_view()),
     path("jobs/<int:job_id>/document/", views.JobDocumentView.as_view()),
+    path("jobs/<int:job_id>/pages/<int:number>/image/", views.JobPageImageView.as_view()),
     path("jobs/<int:job_id>/entities/bulk_update/", views.JobEntitiesBulkUpdateView.as_view()),
     path("jobs/<int:job_id>/rules/", views.JobRulesView.as_view()),
     path("jobs/<int:job_id>/rules/apply/", views.JobRulesApplyView.as_view()),

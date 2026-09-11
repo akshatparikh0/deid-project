@@ -1,9 +1,19 @@
-"""Assembles the DocumentPayload shape (blocks + entities) the review screen
-renders both document panes from."""
+"""Assembles the DocumentPayload shape (pages + blocks + entities) the
+review screen renders both document panes from — real rendered page images,
+with entity boxes (see Entity.boxes) drawn on top as overlays positioned by
+percentage of each page's width/height."""
 from .serializers import EntitySerializer
 
 
 def build_document_payload(job):
+    pages_out = [
+        {
+            "number": page.number, "width": page.width, "height": page.height,
+            "image_url": f"/api/jobs/{job.id}/pages/{page.number}/image/",
+        }
+        for page in job.page_images.order_by("number")
+    ]
+
     blocks_out = []
     entities_qs = list(job.entities.select_related("block").order_by("block__index", "start_in_block"))
 
@@ -27,6 +37,7 @@ def build_document_payload(job):
         })
 
     return {
+        "pages": pages_out,
         "blocks": blocks_out,
         "entities": EntitySerializer(entities_qs, many=True).data,
     }

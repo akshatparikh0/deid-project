@@ -45,6 +45,13 @@ export interface Job {
   updated_at: string;
 }
 
+export interface EntityBox {
+  x0: number;
+  top: number;
+  x1: number;
+  bottom: number;
+}
+
 export interface Entity {
   id: number;
   code: string; // "E-01" (stable per job, ordered by first appearance)
@@ -56,6 +63,14 @@ export interface Entity {
   page: number; // 1-indexed
   detector: string; // "pattern" | "heuristic" | "context"
   block_index: number; // index into DocumentPayload.blocks
+  boxes: EntityBox[]; // page-coordinate (PDF points) bounding boxes, one per visual line touched
+}
+
+export interface DocumentPage {
+  number: number; // 1-indexed
+  width: number; // PDF points — same coordinate space as Entity.boxes
+  height: number;
+  image_url: string; // relative; resolve with resolveApiUrl and fetch with auth (see fetchAuthenticatedBlob)
 }
 
 export type BlockPart = { text: string } | { entity: string }; // entity `code`
@@ -69,6 +84,7 @@ export interface DocumentBlock {
 }
 
 export interface DocumentPayload {
+  pages: DocumentPage[];
   blocks: DocumentBlock[];
   entities: Entity[];
 }

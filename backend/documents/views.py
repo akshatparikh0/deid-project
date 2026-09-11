@@ -7,7 +7,7 @@ from rest_framework.views import APIView
 from .categories import CATEGORY_META, CATEGORY_ORDER
 from .export import build_export, content_type_for
 from .ingest import run_ingestion
-from .models import CategoryRule, Entity, ExportArtifact, Job
+from .models import CategoryRule, Entity, ExportArtifact, Job, Page
 from .payload import build_document_payload
 from .serializers import (
     BulkModeUpdateSerializer,
@@ -87,6 +87,13 @@ class JobDocumentView(APIView):
         if job.status == "failed":
             return Response({"detail": "This job failed to scan and has no document to review."}, status=409)
         return Response(build_document_payload(job))
+
+
+class JobPageImageView(APIView):
+    def get(self, request, job_id, number):
+        job = _job_or_404(job_id)
+        page = get_object_or_404(Page, job=job, number=number)
+        return FileResponse(page.image.open("rb"), content_type="image/png")
 
 
 class EntityDetailView(APIView):

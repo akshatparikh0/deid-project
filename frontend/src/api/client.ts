@@ -227,4 +227,17 @@ export function resolveApiUrl(url: string): string {
   return `${origin}${url}`;
 }
 
+/**
+ * Fetches an authenticated file URL (e.g. a page preview image) as a Blob.
+ * Needed because <img src> can't carry an Authorization header — callers
+ * turn the blob into an object URL instead.
+ */
+export async function fetchAuthenticatedBlob(url: string): Promise<Blob> {
+  const headers = new Headers();
+  if (authToken) headers.set('Authorization', `Token ${authToken}`);
+  const res = await fetch(resolveApiUrl(url), { headers });
+  if (!res.ok) throw new ApiError(res.status, `Failed to load ${url} (status ${res.status}).`);
+  return res.blob();
+}
+
 export { BASE_URL };
