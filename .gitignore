@@ -9,3 +9,9 @@
 .env
 .env.*
 !.env.example
+
+#other
+*.py[cod]
+output/
+*.deidentified.pdf
+*.audit.json
