@@ -169,3 +169,30 @@ CORS_ALLOWED_ORIGINS = [
     *[o for o in os.environ.get('DJANGO_CORS_ALLOWED_ORIGINS', '').split(',') if o],
 ]
 CORS_ALLOW_ALL_ORIGINS = DEBUG
+
+REDACTION_POLICY_PATH = os.environ.get(
+    "REDACTION_POLICY_PATH",
+    str(BASE_DIR / "config" / "default_policy.json"),
+)
+
+REDACTION_ENABLE_AI = (
+    os.environ.get("REDACTION_ENABLE_AI", "False").lower() == "true"
+)
+
+REDACTION_ENABLE_AZURE_LANGUAGE = (
+    os.environ.get(
+        "REDACTION_ENABLE_AZURE_LANGUAGE",
+        "False",
+    ).lower() == "true"
+)
+
+REDACTION_ENABLE_AZURE_OCR = (
+    os.environ.get(
+        "REDACTION_ENABLE_AZURE_OCR",
+        "False",
+    ).lower() == "true"
+)
+
+REDACTION_FORCE_OCR = (
+    os.environ.get("REDACTION_FORCE_OCR", "False").lower() == "true"
+)
