@@ -48,7 +48,7 @@ export function QueuePage() {
     <div>
       <PageHeader
         title="Document library"
-        subtitle="Every document that has entered the pipeline, with its audit record. Sources are purged 24 hours after completion; audit records are retained six years."
+        subtitle="Every document that has entered the pipeline, with its audit record. Sources are purged immediately on completion; audit records are retained six years."
         actions={
           <Link to="/upload" className="btn btn-primary">
             Upload document
