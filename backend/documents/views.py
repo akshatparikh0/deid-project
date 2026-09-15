@@ -88,7 +88,13 @@ class JobDetailView(APIView):
 class JobDocumentView(APIView):
     def get(self, request, job_id):
         job = _job_or_404(job_id)
-        if job.status == "failed":
+        # "failed" covers two different things: ingestion never produced a
+        # document at all (nothing to show), or completion's verification
+        # step rejected an otherwise-fully-reviewed document (blocks and
+        # entities exist, and the reviewer needs to see them to fix
+        # whatever survived) — checking for blocks distinguishes the two
+        # instead of blocking every "failed" job equally.
+        if not job.blocks.exists():
             return Response({"detail": "This job failed to scan and has no document to review."}, status=409)
         return Response(build_document_payload(job))
 

@@ -22,6 +22,7 @@ show a reviewer or auditor what kind of risk remained.
 from __future__ import annotations
 
 import io
+import re
 
 from .ai_detection import PLACEHOLDER_TOKENS
 from .detection import detect_spans, merge_spans
@@ -32,6 +33,13 @@ class VerificationError(RuntimeError):
     pass
 
 
+def _word_boundary_pattern(value: str) -> re.Pattern[str]:
+    # A plain substring check would flag e.g. the name "Mary" as "surviving"
+    # inside the unrelated word "Primary" — require it to appear as its own
+    # word(s), not as a fragment of a longer one.
+    return re.compile(rf"\b{re.escape(value)}\b")
+
+
 def verify_redacted_pdf(pdf_bytes, entities, ai_detectors, min_confidence=0.85):
     """Returns a list of finding dicts; empty means verification passed."""
     kept_categories = {e.category for e in entities if e.mode == "keep"}
@@ -40,8 +48,8 @@ def verify_redacted_pdf(pdf_bytes, entities, ai_detectors, min_confidence=0.85):
         for e in entities
         if e.mode == "pseudo" and e.surrogate_value and e.surrogate_value.strip()
     }
-    original_values = {
-        e.value.strip().casefold()
+    original_value_patterns = {
+        (e.value.strip().casefold(), e.category): _word_boundary_pattern(e.value.strip().casefold())
         for e in entities
         if e.mode != "keep" and e.value.strip()
     }
@@ -53,9 +61,11 @@ def verify_redacted_pdf(pdf_bytes, entities, ai_detectors, min_confidence=0.85):
         text = block["text"]
         lowered = text.casefold()
 
-        for value in original_values:
-            if value in lowered:
-                findings.append({"reason": "original_value_survived", "page": block["page"]})
+        for (value, category), pattern in original_value_patterns.items():
+            if pattern.search(lowered):
+                findings.append({
+                    "reason": "original_value_survived", "category": category, "page": block["page"],
+                })
 
         span_lists = [detect_spans(text)]
         for detector in ai_detectors:
