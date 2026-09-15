@@ -41,7 +41,10 @@ _MIN_NATIVE_WORDS = 25  # below this, also try OCR and keep whichever is more co
 _LINE_TOLERANCE = 2.0  # points; words within this vertical difference are on the same line
 _PARAGRAPH_GAP_MULTIPLIER = 1.6  # a gap bigger than this multiple of the line height starts a new paragraph
 
-PAGE_IMAGE_RESOLUTION = 150  # DPI for both the stored page preview image and OCR rasterization
+PREVIEW_RESOLUTION = 150
+TESSERACT_RESOLUTION = 300
+
+MIN_TESSERACT_CONFIDENCE = 20.0
 
 _TESSERACT_AVAILABLE = shutil.which("tesseract") is not None
 
@@ -214,20 +217,40 @@ def _ocr_words(image, resolution):
     from pytesseract import Output
 
     scale = 72.0 / resolution
-    data = pytesseract.image_to_data(image, output_type=Output.DICT)
+
+    data = pytesseract.image_to_data(image, output_type=Output.DICT, config="--oem 3 --psm 6")
     words = []
-    for i, text in enumerate(data["text"]):
-        if not text.strip():
+    for index, raw_text in enumerate(data["text"]):
+        text = (raw_text or "").strip()
+        if not text:
             continue
-        left, top, width, height = data["left"][i], data["top"][i], data["width"][i], data["height"][i]
-        words.append({
-            "text": text, "x0": left * scale, "top": top * scale,
-            "x1": (left + width) * scale, "bottom": (top + height) * scale,
-        })
+        try:
+            confidence = float(data["conf"][index])
+        except (TypeError, ValueError):
+            confidence = -1.0
+
+        if confidence < MIN_TESSERACT_CONFIDENCE:
+            continue
+
+        left = int(data["left"][index])
+        top = int(data["top"][index])
+        width = int(data["width"][index])
+        height = int(data["height"][index])
+
+        words.append(
+            {
+                "text": text,
+                "x0": left * scale,
+                "top": top * scale,
+                "x1": (left + width) * scale,
+                "bottom": (top + height) * scale,
+                "confidence": confidence / 100.0,
+            }
+        )
     return words
 
 
-def extract_blocks(file_obj):
+def extract_blocks(file_obj, *, force_ocr=False):
     """
     Returns (page_count, blocks, pages) where:
     - blocks is a list of {index, page, type, text, source, words?, cells?}
@@ -258,12 +281,27 @@ def extract_blocks(file_obj):
                         w for w in page.extract_words()
                         if not any(_within_bbox(w["x0"], w["top"], w["x1"], w["bottom"], b) for b in table_bboxes)
                     ]
-                    rendered_image = page.to_image(resolution=PAGE_IMAGE_RESOLUTION).original
+                    preview_image = page.to_image(resolution=PREVIEW_RESOLUTION).original
                 except Exception as exc:  # pragma: no cover - pdfplumber internal failure
                     raise ExtractionError(f"Could not read page {page_number}: {exc}") from exc
 
                 native_words = len(words) + sum(len(cell_text.split()) for table in tables for row in table for cell_text, _, _ in row)
                 source = "text"
+                should_try_tesseract = force_ocr or native_words < _MIN_NATIVE_WORDS
+
+                if should_try_tesseract:
+                    ocr_image = page.to_image(
+                        resolution=TESSERACT_RESOLUTION
+                    ).original
+                    ocr_words = _ocr_words(
+                        ocr_image,
+                        TESSERACT_RESOLUTION,
+                    )
+                    if force_ocr or len(ocr_words) > native_words:
+                        words = ocr_words
+                        tables = []
+                        source = "tesseract"
+
                 if native_words < _MIN_NATIVE_WORDS:
                     # A handful of stray text runs (a couple of labels, a
                     # border-line "table" pdfplumber mistook for real cells)
@@ -287,7 +325,7 @@ def extract_blocks(file_obj):
                         index += 1
 
                 png_buf = io.BytesIO()
-                rendered_image.save(png_buf, format="PNG")
+                preview_image.save(png_buf, format="PNG")
                 pages.append({
                     "number": page_number, "width": page.width, "height": page.height,
                     "png": png_buf.getvalue(),
@@ -301,9 +339,19 @@ def extract_blocks(file_obj):
         raise ExtractionError(f"Could not parse this PDF: {message}") from exc
 
     if not blocks:
-        hint = "" if _TESSERACT_AVAILABLE else " Tesseract OCR isn't installed on this server, so image-only pages couldn't be read either — install it and retry."
-        raise ExtractionError(
-            "No extractable text was found. The PDF may be a scanned image "
-            f"with no text layer.{hint}"
-        )
+        if not blocks:
+            if not _TESSERACT_AVAILABLE:
+                hint = (
+                    " Tesseract OCR is not installed, so image-only pages "
+                    "could not be processed."
+                )
+            else:
+                hint = (
+                    " Tesseract was available, but it did not find usable text."
+                )
+
+            raise ExtractionError(
+                "No extractable text was found. The PDF may be blank or "
+                f"contain an unreadable scanned image.{hint}"
+            )
     return page_count, blocks, pages

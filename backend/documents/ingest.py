@@ -15,6 +15,8 @@ reason.
 from django.core.files.base import ContentFile
 from django.db import transaction
 
+from redaction_pipeline.validation import ValidationError, validate_pdf
+
 from .categories import CATEGORY_META, CATEGORY_ORDER
 from .detection import detect_spans
 from .extraction import ExtractionError, extract_blocks
@@ -51,12 +53,28 @@ def run_ingestion(job, file_obj):
     becomes 'in_review'. On failure, job.status becomes 'failed' with
     error_message set. Either way the job is saved before returning."""
     try:
-        page_count, raw_blocks, raw_pages = extract_blocks(file_obj)
-    except ExtractionError as exc:
+        validation = validate_pdf(
+            file_obj,
+            filename=getattr(file_obj, "name", job.filename),
+        )
+
+        file_obj.seek(0)
+
+        page_count, raw_blocks, raw_pages = extract_blocks(
+            file_obj,
+            force_ocr=False,
+        )
+    except (ValidationError, ExtractionError) as exc:
         job.status = "failed"
         job.error_message = str(exc)
         job.pages = 0
-        job.save(update_fields=["status", "error_message", "pages"])
+        job.save(
+            update_fields=[
+                "status",
+                "error_message",
+                "pages",
+            ]
+        )
         return job
 
     with transaction.atomic():
