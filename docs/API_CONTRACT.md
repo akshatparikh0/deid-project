@@ -26,9 +26,9 @@ type Mode = 'redact' | 'mask' | 'pseudo' | 'keep';
 type JobStatus = 'queued' | 'scanning' | 'in_review' | 'finalizing' | 'complete' | 'failed';
 ```
 
-This is the unified entity taxonomy shared by the Django app, the
-standalone `redaction_pipeline` package, and the project configuration
-schema (`config/default_policy.json`) — `patient_name` / `physician_name` /
+This is the unified entity taxonomy shared by the Django app and the
+project configuration schema (`config/default_policy.json`) —
+`patient_name` / `physician_name` /
 `guarantor_name` / `person_name` are split out as their own categories even
 though Safe Harbor's "Names" identifier covers all four the same way; the
 split is purely for reviewer clarity, and `guarantor_name` also matches its

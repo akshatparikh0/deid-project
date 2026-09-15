@@ -104,8 +104,8 @@ _DOS_CONTEXT = re.compile(r"(?:dos|date\s+of\s+service|service\s+date|visit\s+da
 # longer span, then earliest start — NOT source-list order.
 #
 # Categories here follow the unified taxonomy in categories.py (shared with
-# the standalone redaction_pipeline package and the project configuration
-# schema) rather than the raw HIPAA Safe Harbor identifier list — e.g. dates
+# the project configuration schema) rather than the raw HIPAA Safe Harbor
+# identifier list — e.g. dates
 # are split into date_of_birth/date_of_service/other_date so the first
 # release's per-entity-type policy (FR-23 – FR-40) can keep the date of
 # service unchanged while masking every other date.

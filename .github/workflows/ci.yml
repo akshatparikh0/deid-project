@@ -36,11 +36,8 @@ jobs:
       - name: Check for missing migrations
         run: python manage.py makemigrations --check --dry-run
 
-      - name: Run Django tests (documents, accounts)
+      - name: Run tests
         run: python manage.py test documents accounts -v 2
-
-      - name: Run redaction_pipeline tests (standalone package)
-        run: python -m pytest -v
 
   frontend:
     runs-on: ubuntu-latest

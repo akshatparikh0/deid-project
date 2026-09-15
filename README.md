@@ -8,11 +8,10 @@ whether each is redacted, masked, pseudonymized, or kept, and the tool
 exports a de-identified PDF plus an audit trail (hashes only — never
 plaintext) and an entity manifest.
 
-- **Backend** — `backend/` — Django + Django REST Framework, plus the
-  standalone `redaction_pipeline` package (also usable as its own CLI) that
-  provides true PyMuPDF redaction and the Azure/Claude detector clients the
-  Django app builds on for reviewer-approved finalization and verification.
-  See `backend/README.md` for architecture notes and known simplifications.
+- **Backend** — `backend/` — Django + Django REST Framework. The entire
+  pipeline (detection, extraction, true PyMuPDF redaction, verification)
+  lives in the `documents` app — see `backend/README.md` for architecture
+  notes and known simplifications.
 - **Frontend** — `frontend/` — React + TypeScript (Vite, react-router-dom).
   See `frontend/README.md` for architecture notes and judgment calls made
   against the API contract.

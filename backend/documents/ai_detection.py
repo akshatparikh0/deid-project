@@ -12,19 +12,12 @@ detect_spans()'s contract) and returns spans in the exact same shape
 engines' output through detection.merge_spans() with no engine-specific
 handling downstream. Category strings are the unified taxonomy from
 categories.py (CATEGORY_META) — the same one the regex engine emits.
-
-Azure/Anthropic client construction (and the Claude prompt-parsing helper)
-is shared with the standalone redaction_pipeline package rather than
-duplicated; only the span shape and category mapping are specific to this
-app's block-based model, since redaction_pipeline's own detectors operate
-over its page-based Document/Word geometry instead.
 """
 from __future__ import annotations
 
+import json
 import os
 import re
-
-from redaction_pipeline.detection import parse_claude_items
 
 from .categories import CATEGORY_META
 from .detection import _person_category
@@ -91,6 +84,40 @@ class AzureLanguageDetector:
                 "confidence": float(entity.confidence_score), "detector": self.engine_name,
             })
         return spans
+
+
+def parse_claude_items(raw: str) -> list[dict]:
+    """Extract JSON arrays from a Claude response even if it adds Markdown
+    fences, prose, or self-corrections around them."""
+    decoder = json.JSONDecoder()
+    items: list[dict] = []
+    found_array = False
+
+    # Prefer fenced blocks when Claude uses Markdown.
+    fenced_blocks = re.findall(r"```(?:json)?\s*(.*?)```", raw, flags=re.IGNORECASE | re.DOTALL)
+    candidates = fenced_blocks or [raw]
+
+    for candidate in candidates:
+        position = 0
+        while position < len(candidate):
+            array_start = candidate.find("[", position)
+            if array_start == -1:
+                break
+            try:
+                value, consumed = decoder.raw_decode(candidate[array_start:])
+            except json.JSONDecodeError:
+                position = array_start + 1
+                continue
+            position = array_start + consumed
+            if isinstance(value, list):
+                found_array = True
+                items.extend(item for item in value if isinstance(item, dict))
+
+    if not found_array:
+        # Do not include raw in the exception because it may contain PHI.
+        raise RuntimeError("Claude response did not contain a valid JSON array")
+
+    return items
 
 
 _CLAUDE_ALLOWED_CATEGORIES = {

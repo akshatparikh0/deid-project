@@ -40,14 +40,10 @@ AI detector, storage, and broker setting.
 
 ## Architecture
 
-Two packages implement the pipeline: `redaction_pipeline` is a standalone,
-framework-agnostic library (also usable as a CLI — see its own `cli.py`)
-providing PDF validation, OCR/extraction, detection engine clients, and true
-PyMuPDF redaction; `documents` is the Django app that drives the actual
-product — its own richer regex/heuristic detector and block-aware pdfplumber
-extraction (built for the review screen's per-span highlighting), which
-calls into `redaction_pipeline` for the pieces that don't need to be
-reimplemented per-model (Azure/Claude API clients, true PDF redaction).
+The entire pipeline lives in the `documents` Django app — one place to read
+it end to end, one `detection.py`, one `extraction.py`, no second copy of
+either under a different package. (An earlier iteration split this across a
+standalone `redaction_pipeline` package and this app; it's been folded in.)
 
 - **`documents/detection.py`** — the base PHI detector. It's regex +
   keyword-context based, not a trained NER model, so the project has zero
@@ -59,7 +55,7 @@ reimplemented per-model (Azure/Claude API clients, true PDF redaction).
   `physician_name` / `guarantor_name` / other `person_name`, by nearby cue
   words), facilities, employers, biometrics, photos and the open-ended
   "other" class — the full taxonomy is `categories.py`'s `CATEGORY_ORDER`,
-  shared with the project configuration schema and `redaction_pipeline`.
+  shared with the project configuration schema.
   Overlapping matches are resolved by confidence first (not span length), so
   a short high-confidence match is never silently dropped in favor of a
   longer, vaguer one. When a piece of text is a table cell, its column
