@@ -5,18 +5,20 @@
   "physician_name": [
     "Michael Ostrander, MD"
   ],
-  "facility": [
+  "facility_name": [
     "Cedar Grove Medical Center"
   ],
   "mrn": [
     "4471002"
   ],
-  "date": [
+  "date_of_birth": [
+    "03/14/1953"
+  ],
+  "other_date": [
     "09/02/2026",
-    "03/14/1953",
     "7/2023"
   ],
-  "name": [
+  "person_name": [
     "Dorothy Whitcombe",
     "Harold Whitcombe",
     "Margaret Ellery",

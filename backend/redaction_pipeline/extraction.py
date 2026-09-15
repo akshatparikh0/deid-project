@@ -93,8 +93,11 @@ class AzureDocumentIntelligenceOCR:
         x_scale, y_scale = page.rect.width / analyzed.width, page.rect.height / analyzed.height
         items: list[tuple[str, tuple[float, float, float, float], float]] = []
         for word in analyzed.words or []:
+            # polygon is a flat [x1, y1, x2, y2, ...] float list (clockwise
+            # vertices), not a list of Point objects — see DocumentWord in
+            # azure.ai.documentintelligence.models.
             polygon = word.polygon or []
-            xs, ys = [p.x * x_scale for p in polygon], [p.y * y_scale for p in polygon]
+            xs, ys = [x * x_scale for x in polygon[0::2]], [y * y_scale for y in polygon[1::2]]
             if xs and ys:
                 items.append((word.content, (min(xs), min(ys), max(xs), max(ys)), float(word.confidence or 0.0)))
         return _assemble_words(page_number, items, self.engine_name)

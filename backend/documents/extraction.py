@@ -30,6 +30,7 @@ replaces the page's text if it finds *more* content than native extraction
 did, so a genuinely short page never gets worse by attempting OCR.
 """
 import io
+import os
 import re
 import shutil
 
@@ -250,7 +251,57 @@ def _ocr_words(image, resolution):
     return words
 
 
-def extract_blocks(file_obj, *, force_ocr=False):
+def _azure_ocr_words(image, page_width, page_height):
+    """Runs Azure AI Document Intelligence (FR-60) on `image` and returns a
+    word list shaped like pdfplumber's extract_words(), scaled from the
+    service's own page dimensions into this page's PDF points. Third- and
+    last-resort OCR tier, tried only when both the native text layer and
+    Tesseract come up short (e.g. a low-quality fax scan) and
+    REDACTION_ENABLE_AZURE_OCR is set. Requires
+    AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT; falls back to a managed identity
+    (FR-62) when no static key is configured."""
+    from azure.ai.documentintelligence import DocumentIntelligenceClient
+    from azure.core.credentials import AzureKeyCredential
+
+    endpoint = os.environ.get("AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT", "")
+    key = os.environ.get("AZURE_DOCUMENT_INTELLIGENCE_KEY", "")
+    if not endpoint:
+        raise ExtractionError("AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT is required when REDACTION_ENABLE_AZURE_OCR=True")
+    if key:
+        credential = AzureKeyCredential(key)
+    else:
+        from azure.identity import DefaultAzureCredential
+        credential = DefaultAzureCredential()
+    client = DocumentIntelligenceClient(endpoint=endpoint, credential=credential)
+
+    buf = io.BytesIO()
+    image.save(buf, format="PNG")
+    result = client.begin_analyze_document("prebuilt-read", body=buf.getvalue()).result()
+    if not result.pages:
+        return []
+
+    analyzed = result.pages[0]
+    x_scale = page_width / (analyzed.width or page_width)
+    y_scale = page_height / (analyzed.height or page_height)
+
+    words = []
+    for word in analyzed.words or []:
+        # polygon is a flat [x1, y1, x2, y2, ...] float list (clockwise
+        # vertices), not a list of Point objects.
+        polygon = word.polygon or []
+        xs = [x * x_scale for x in polygon[0::2]]
+        ys = [y * y_scale for y in polygon[1::2]]
+        if not xs or not ys:
+            continue
+        words.append({
+            "text": word.content,
+            "x0": min(xs), "top": min(ys), "x1": max(xs), "bottom": max(ys),
+            "confidence": float(word.confidence or 0.0),
+        })
+    return words
+
+
+def extract_blocks(file_obj, *, force_ocr=False, azure_ocr_enabled=False):
     """
     Returns (page_count, blocks, pages) where:
     - blocks is a list of {index, page, type, text, source, words?, cells?}
@@ -302,18 +353,15 @@ def extract_blocks(file_obj, *, force_ocr=False):
                         tables = []
                         source = "tesseract"
 
-                if native_words < _MIN_NATIVE_WORDS:
-                    # A handful of stray text runs (a couple of labels, a
-                    # border-line "table" pdfplumber mistook for real cells)
-                    # shouldn't count as "this page has usable text" — a
-                    # real page of prose has far more than a couple dozen
-                    # words. Only actually switch to OCR if it turns up more
-                    # content than what native extraction found, never less.
-                    ocr_words = _ocr_words(rendered_image, PAGE_IMAGE_RESOLUTION)
-                    if len(ocr_words) > native_words:
-                        words = ocr_words
-                        tables = []
-                        source = "ocr"
+                    # Tesseract still came up short (or isn't installed) —
+                    # try Azure Document Intelligence as a last resort
+                    # before accepting a possibly-blank page.
+                    if azure_ocr_enabled and len(words) < _MIN_NATIVE_WORDS:
+                        azure_words = _azure_ocr_words(ocr_image, page.width, page.height)
+                        if len(azure_words) > len(words):
+                            words = azure_words
+                            tables = []
+                            source = "azure_ocr"
 
                 lines = _group_words_into_lines(sorted(words, key=lambda w: (round(w["top"]), w["x0"])))
                 page_blocks, index = _group_lines_into_blocks(lines, page_number, index, source)

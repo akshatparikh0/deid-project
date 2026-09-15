@@ -8,11 +8,16 @@ whether each is redacted, masked, pseudonymized, or kept, and the tool
 exports a de-identified PDF plus an audit trail (hashes only — never
 plaintext) and an entity manifest.
 
-- **Backend** — `backend/` — Django + Django REST Framework. See
-  `backend/README.md` for architecture notes and known simplifications.
+- **Backend** — `backend/` — Django + Django REST Framework, plus the
+  standalone `redaction_pipeline` package (also usable as its own CLI) that
+  provides true PyMuPDF redaction and the Azure/Claude detector clients the
+  Django app builds on for reviewer-approved finalization and verification.
+  See `backend/README.md` for architecture notes and known simplifications.
 - **Frontend** — `frontend/` — React + TypeScript (Vite, react-router-dom).
   See `frontend/README.md` for architecture notes and judgment calls made
   against the API contract.
+- **Infrastructure** — `infra/` (Bicep, Azure) and `docker-compose.yml` /
+  `.github/workflows/ci.yml` — see [Deployment](#deployment) below.
 
 ## Run it
 
@@ -36,10 +41,35 @@ and the frontend (:5173), and Ctrl+C stops both:
 ```
 
 Open `http://localhost:5173`, upload a PDF, and walk through
-Rules → Review → Export.
+Rules → Review → Complete → Export. Everything runs synchronously
+in-process against local disk + SQLite by default — no broker, database
+server, or cloud credentials needed for this path; upload processing, true
+PDF finalization, and second-pass verification all happen inline, the same
+way they would with a real Celery worker and Postgres behind them (see
+Deployment).
 
 ## API contract
 
 The full request/response contract both sides were built against lives at
 [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md) — the definitive reference
 for endpoint shapes, field names, and status codes.
+
+## Deployment
+
+- **Docker Compose** (`docker-compose.yml`) — Postgres + Redis + the Django
+  API + a Celery worker + the built frontend behind nginx, for exercising
+  the async/multi-service path locally before it ships:
+  `cp backend/.env.example backend/.env && docker compose up --build`.
+  `docker-compose.staging.yml` overlays pre-built registry images instead
+  of building locally.
+- **CI** (`.github/workflows/ci.yml`) — Django tests, the standalone
+  pipeline's pytest suite, a frontend typecheck + build, both Docker images,
+  and a Bicep compile check, on every push/PR.
+- **Azure infrastructure** (`infra/main.bicep`) — provisions every FR-54 –
+  FR-66 component (Container Apps, Service Bus, PostgreSQL Flexible Server,
+  Key Vault, Document Intelligence, AI Language, Blob Storage, private
+  networking end to end). Compiles cleanly (`bicep build`) but **has not
+  been deployed against a real Azure subscription** — see `infra/README.md`
+  for the deploy command, the two manual steps Bicep can't automate
+  (Entra ID app registration, the HIPAA BAA), and a note on hardening audit
+  trail immutability at the database level.

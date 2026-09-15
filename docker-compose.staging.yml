@@ -1,0 +1,35 @@
+# Staging overlay: pulls pre-built images from a registry (set IMAGE_TAG)
+# instead of building locally, turns DEBUG off, and drops the host port
+# publishing docker-compose.yml uses for local access (staging sits behind
+# its own ingress/load balancer — see infra/main.bicep for the Azure
+# equivalent of this same shape, which is what staging and prod actually
+# run on; this compose file is for a non-Azure staging box, or for
+# rehearsing the container images before a Container Apps deploy).
+#
+# Usage:
+#   IMAGE_TAG=sha-abc1234 REGISTRY=ghcr.io/your-org/deid \
+#     docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d
+name: deid
+
+services:
+  api:
+    image: ${REGISTRY:-deid}/backend:${IMAGE_TAG:-latest}
+    build: null
+    ports: []
+    environment:
+      DJANGO_DEBUG: "False"
+
+  worker:
+    image: ${REGISTRY:-deid}/backend:${IMAGE_TAG:-latest}
+    build: null
+    environment:
+      DJANGO_DEBUG: "False"
+
+  migrate:
+    image: ${REGISTRY:-deid}/backend:${IMAGE_TAG:-latest}
+    build: null
+
+  frontend:
+    image: ${REGISTRY:-deid}/frontend:${IMAGE_TAG:-latest}
+    build: null
+    ports: []

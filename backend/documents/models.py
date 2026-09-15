@@ -137,6 +137,51 @@ class CategoryRule(models.Model):
         return f"{self.job.code}:{self.category}"
 
 
+class ImmutableRecordError(RuntimeError):
+    pass
+
+
+class AuditRecord(models.Model):
+    """One permanent row per entity, written once at job finalization
+    (documents.audit.write_audit_records) — never derived live from the
+    (still-editable, pre-completion) Entity table the way the old
+    JobAuditView response was. This is the append-only compliance record
+    NFR-16 requires: save() refuses any change to an existing row, and
+    delete() refuses to remove one directly. Note this only guards
+    application-level access — cascading deletion of the parent Job (see
+    Job.delete, used by the existing job-management API) still removes
+    these rows at the database level, same as every other per-job table;
+    true database-enforced append-only (a Postgres REVOKE UPDATE/DELETE
+    grant) is a deployment-time hardening step, not something the ORM layer
+    alone can guarantee — see infra/README.md."""
+    job = models.ForeignKey(Job, related_name="audit_records", on_delete=models.CASCADE)
+    entity_code = models.CharField(max_length=12)
+    category = models.CharField(max_length=32, choices=CATEGORY_CHOICES)
+    value_hash = models.CharField(max_length=80)
+    action = models.CharField(max_length=16, choices=MODE_CHOICES)
+    detector = models.CharField(max_length=32)
+    confidence = models.FloatField()
+    page = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["entity_code"]
+        constraints = [
+            models.UniqueConstraint(fields=["job", "entity_code"], name="unique_audit_record_per_job_entity"),
+        ]
+
+    def __str__(self):
+        return f"{self.job.code}:{self.entity_code}"
+
+    def save(self, *args, **kwargs):
+        if self.pk is not None:
+            raise ImmutableRecordError("Audit records are append-only and cannot be modified.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ImmutableRecordError("Audit records are append-only and cannot be deleted.")
+
+
 class ExportArtifact(models.Model):
     """A generated export file (pdf/csv/json) kept on disk so repeated
     downloads don't require regenerating it."""

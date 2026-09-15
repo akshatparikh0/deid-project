@@ -121,7 +121,7 @@ class NoTextLayerTests(SimpleTestCase):
 class OcrFallbackTests(SimpleTestCase):
     def test_scanned_page_is_ocrd(self):
         _, blocks, pages = extract_blocks(_fixture("consult_note_scanned.pdf"))
-        self.assertTrue(any(b["source"] == "ocr" for b in blocks))
+        self.assertTrue(any(b["source"] == "tesseract" for b in blocks))
         full_text = " ".join(b["text"] for b in blocks)
         self.assertIn("Whitcombe", full_text)
         self.assertIn("4471002", full_text)
@@ -129,7 +129,7 @@ class OcrFallbackTests(SimpleTestCase):
 
     def test_ocr_blocks_carry_word_positions(self):
         _, blocks, _ = extract_blocks(_fixture("consult_note_scanned.pdf"))
-        ocr_blocks_with_words = [b for b in blocks if b["source"] == "ocr" and b.get("words")]
+        ocr_blocks_with_words = [b for b in blocks if b["source"] == "tesseract" and b.get("words")]
         self.assertTrue(ocr_blocks_with_words)
         block = ocr_blocks_with_words[0]
         words_text = " ".join(block["text"][w["start"]:w["end"]] for w in block["words"])
@@ -152,7 +152,7 @@ class SparseNativeTextTriggersOcrTests(SimpleTestCase):
         for b in blocks:
             sources_by_page.setdefault(b["page"], set()).add(b["source"])
         for page, sources in sources_by_page.items():
-            self.assertEqual(sources, {"ocr"}, f"page {page} did not fall back to OCR")
+            self.assertEqual(sources, {"tesseract"}, f"page {page} did not fall back to OCR")
         # The spurious near-full-page tables on pages 2-4 must not survive
         # once OCR supersedes that page's native extraction.
         self.assertFalse(any(b["type"] == "table_row" for b in blocks))

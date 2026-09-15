@@ -4,29 +4,42 @@
 export type Category =
   | 'patient_name'
   | 'physician_name'
-  | 'name'
-  | 'facility'
-  | 'geo'
-  | 'date'
+  | 'person_name'
+  | 'guarantor_name'
+  | 'facility_name'
+  | 'employer'
+  | 'date_of_birth'
+  | 'date_of_service'
+  | 'other_date'
+  | 'age_over_89'
+  | 'age_89_or_below'
+  | 'street_address'
+  | 'zip_code'
   | 'phone'
   | 'fax'
   | 'email'
+  | 'url'
   | 'ssn'
   | 'mrn'
-  | 'plan'
+  | 'member_id'
   | 'account'
+  | 'payment_card'
+  | 'ip_address'
+  | 'device_id'
   | 'license'
   | 'vehicle'
-  | 'device'
-  | 'url'
-  | 'ip'
   | 'biometric'
   | 'photo'
   | 'other';
 
 export type Mode = 'redact' | 'mask' | 'pseudo' | 'keep';
 
-export type JobStatus = 'scanning' | 'in_review' | 'complete' | 'failed';
+// "queued": uploaded, waiting for a worker to pick it up (async processing
+// — see the backend's Celery integration; with no broker configured this
+// state is typically instantaneous). "finalizing": completion requested,
+// running true-PDF-redaction + second-pass verification — also normally
+// instantaneous, but a real state a client can poll/show a spinner for.
+export type JobStatus = 'queued' | 'scanning' | 'in_review' | 'finalizing' | 'complete' | 'failed';
 
 export interface Job {
   id: number;
@@ -79,7 +92,9 @@ export interface DocumentBlock {
   index: number;
   page: number;
   type: 'title' | 'sub' | 'h' | 'p' | 'table_row';
-  source: 'text' | 'ocr'; // 'ocr' = Tesseract fallback for a page with no native text layer
+  // 'tesseract' / 'azure_ocr' = OCR fallback tiers for a page with no
+  // usable native text layer, tried in that order.
+  source: 'text' | 'tesseract' | 'azure_ocr';
   parts: BlockPart[];
 }
 
