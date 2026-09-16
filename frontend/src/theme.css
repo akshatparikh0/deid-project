@@ -318,6 +318,64 @@ button {
   background: #fbfaf7;
 }
 
+/* ---- Breadcrumbs (document library folder navigation) ---- */
+
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+
+.breadcrumb-item {
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  font: inherit;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+button.breadcrumb-item:hover {
+  color: var(--color-accent);
+  background: #f2f6fb;
+}
+
+.breadcrumb-current {
+  color: var(--color-text);
+  font-weight: 600;
+  cursor: default;
+}
+
+.breadcrumb-sep {
+  color: var(--color-text-faint);
+  margin: 0 2px;
+}
+
+.folder-icon {
+  display: inline-block;
+  width: 13px;
+  height: 10px;
+  margin-right: 9px;
+  vertical-align: middle;
+  background: var(--color-warning);
+  opacity: 0.75;
+  border-radius: 0 2px 2px 2px;
+  position: relative;
+}
+
+.folder-icon::before {
+  content: '';
+  position: absolute;
+  top: -3px;
+  left: 0;
+  width: 6px;
+  height: 3px;
+  background: inherit;
+  border-radius: 2px 2px 0 0;
+}
+
 /* ---- Buttons ---- */
 
 .btn {

@@ -1,15 +1,24 @@
 import type { ReactNode } from 'react';
 import { useSyncExternalStore } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { getActiveJobSnapshot, getQueueCountSnapshot, subscribeActiveJob } from '../lib/activeJob';
+import {
+  getActiveFolderSnapshot,
+  getActiveJobSnapshot,
+  getQueueCountSnapshot,
+  getUploadReadySnapshot,
+  subscribeActiveJob,
+} from '../lib/activeJob';
 import { getAuthUserSnapshot, logout, subscribeAuth } from '../lib/auth';
+import { routeForJobStatus } from '../lib/jobRoute';
 import { Toast } from './Toast';
 
 export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const activeJob = useSyncExternalStore(subscribeActiveJob, getActiveJobSnapshot);
+  const activeFolder = useSyncExternalStore(subscribeActiveJob, getActiveFolderSnapshot);
   const queueCount = useSyncExternalStore(subscribeActiveJob, getQueueCountSnapshot);
+  const uploadReadyFolderId = useSyncExternalStore(subscribeActiveJob, getUploadReadySnapshot);
   const user = useSyncExternalStore(subscribeAuth, getAuthUserSnapshot);
 
   async function onLogout() {
@@ -18,31 +27,39 @@ export function Layout() {
   }
 
   const path = location.pathname;
-  const rulesPath = activeJob ? `/jobs/${activeJob.id}/rules` : null;
-  const reviewPath = activeJob ? `/jobs/${activeJob.id}/review` : null;
+  const rulesPath = activeFolder ? `/folders/${activeFolder.id}/rules` : null;
+  const uploadPath =
+    activeFolder && uploadReadyFolderId === activeFolder.id ? `/upload?folder=${activeFolder.id}` : null;
+  const reviewPath = activeJob ? routeForJobStatus(activeJob.id, activeJob.status) : null;
 
   const items = [
-    { num: '01', label: 'Upload file', badge: '', to: '/upload', active: path === '/upload' },
+    {
+      num: '01',
+      label: 'Document library',
+      badge: queueCount != null ? String(queueCount) : '',
+      to: '/queue',
+      active: path === '/queue' || /^\/jobs\/\d+\/audit$/.test(path),
+    },
     {
       num: '02',
-      label: 'Rules',
-      badge: activeJob ? String(activeJob.classCount) : '',
+      label: 'Config Rules',
+      badge: '',
       to: rulesPath,
       active: rulesPath !== null && path === rulesPath,
     },
     {
       num: '03',
-      label: 'Review',
-      badge: activeJob ? String(activeJob.entityCount) : '',
-      to: reviewPath,
-      active: reviewPath !== null && path === reviewPath,
+      label: 'Upload File',
+      badge: '',
+      to: uploadPath,
+      active: path === '/upload',
     },
     {
       num: '04',
-      label: 'Document library',
-      badge: queueCount != null ? String(queueCount) : '',
-      to: '/queue',
-      active: path === '/queue' || /^\/jobs\/\d+\/audit$/.test(path),
+      label: 'Review',
+      badge: activeJob ? String(activeJob.entityCount) : '',
+      to: reviewPath,
+      active: reviewPath !== null && (path === reviewPath || /^\/jobs\/\d+\/rules$/.test(path)),
     },
   ];
 
