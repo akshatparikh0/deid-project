@@ -1,10 +1,11 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { DragEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ApiError, createJob } from '../api/client';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { ApiError, applyRules, createJob, listFolders } from '../api/client';
 import type { Mode } from '../api/types';
 import { PageHeader } from '../components/Layout';
-import { ErrorBanner } from '../components/States';
+import { EmptyState, ErrorBanner, LoadingState } from '../components/States';
+import { isPatientFolder } from '../lib/folders';
 import { showToast } from '../lib/toast';
 
 const PRESETS: {
@@ -46,6 +47,21 @@ export function UploadPage() {
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const folderParam = searchParams.get('folder');
+  const folder = folderParam ? Number(folderParam) : null;
+  const libraryHref = folder ? `/queue?folder=${folder}` : '/queue';
+  const [folderValid, setFolderValid] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (folder === null) {
+      setFolderValid(false);
+      return;
+    }
+    listFolders()
+      .then((res) => setFolderValid(isPatientFolder(res.folders, folder)))
+      .catch(() => setFolderValid(false));
+  }, [folder]);
 
   function pickFile(f: File | undefined | null) {
     if (!f) return;
@@ -71,20 +87,49 @@ export function UploadPage() {
     setSubmitting(true);
     setError(null);
     try {
-      const { job } = await createJob({ file, preset: DEFAULT_PRESET });
+      const { job } = await createJob({ file, preset: DEFAULT_PRESET, folder });
       if (job.status === 'failed') {
         setError(job.error_message || 'This PDF could not be processed.');
         setSubmitting(false);
         return;
       }
-      showToast(
-        `Scan complete — ${job.entity_count} identifiers in ${job.class_count} classes. Confirm the default action for each.`,
-      );
-      navigate(`/jobs/${job.id}/rules`);
+      // The folder's config rules were already confirmed before upload, so apply
+      // them straight away instead of stopping on a redundant per-job rules step.
+      await applyRules(job.id);
+      showToast(`Scan complete — ${job.entity_count} identifiers in ${job.class_count} classes.`);
+      navigate(`/jobs/${job.id}/review`);
     } catch (err) {
       setError(err instanceof ApiError ? err.detail : 'Upload failed. Please try again.');
       setSubmitting(false);
     }
+  }
+
+  if (folderValid === null) {
+    return <LoadingState label="Checking folder…" />;
+  }
+
+  if (!folderValid) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center' }}>
+        <div style={{ width: '100%', maxWidth: 680 }}>
+          <PageHeader
+            title="New de-identification job"
+            subtitle="Files are processed in an isolated enclave. Source documents are purged after export."
+          />
+          <div className="card">
+            <EmptyState
+              title="Choose a patient folder first"
+              description="Documents can only be uploaded inside a patient folder. Open a patient folder in the document library, then upload from there."
+              action={
+                <Link to="/queue" className="btn btn-primary">
+                  Go to document library
+                </Link>
+              }
+            />
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -195,7 +240,7 @@ export function UploadPage() {
             <button className="btn btn-primary" disabled={!file || submitting} onClick={onSubmit}>
               {submitting ? 'Scanning…' : 'Scan for PHI'}
             </button>
-            <button className="btn" disabled={submitting} onClick={() => navigate('/queue')}>
+            <button className="btn" disabled={submitting} onClick={() => navigate(libraryHref)}>
               Cancel
             </button>
           </div>

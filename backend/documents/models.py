@@ -16,10 +16,47 @@ def upload_path(instance, filename):
     return f"uploads/{filename}"
 
 
+class Folder(models.Model):
+    """A node in the document library's file tree. The tree is exactly two
+    levels deep: level 0 is a project, level 1 (a project's child) is a
+    patient. Patient folders hold documents, not further folders — enforced
+    in the serializers, not here, since the model itself stays generic."""
+    name = models.CharField(max_length=255)
+    parent = models.ForeignKey("self", null=True, blank=True, related_name="children", on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def level(self):
+        level = 0
+        current = self
+        while current.parent_id is not None:
+            level += 1
+            current = current.parent
+        return level
+
+    def descendant_ids(self):
+        ids = set()
+        stack = [self]
+        while stack:
+            current = stack.pop()
+            for child in current.children.all():
+                ids.add(child.id)
+                stack.append(child)
+        return ids
+
+
 class Job(models.Model):
     filename = models.CharField(max_length=255)
     uploaded_by = models.CharField(max_length=120, blank=True, default="")
     department = models.CharField(max_length=120, blank=True, default="")
+    folder = models.ForeignKey(Folder, null=True, blank=True, related_name="jobs", on_delete=models.CASCADE)
     pages = models.PositiveIntegerField(default=0)
     status = models.CharField(max_length=16, choices=JOB_STATUS_CHOICES, default="scanning")
     error_message = models.TextField(null=True, blank=True)
@@ -135,6 +172,25 @@ class CategoryRule(models.Model):
 
     def __str__(self):
         return f"{self.job.code}:{self.category}"
+
+
+class FolderCategoryRule(models.Model):
+    """The default detection ruleset for a patient folder, configured before
+    any document is uploaded into it. New jobs created under the folder seed
+    their per-job CategoryRule rows from this (see ingest.run_ingestion)."""
+    folder = models.ForeignKey(Folder, related_name="rules", on_delete=models.CASCADE)
+    category = models.CharField(max_length=16, choices=CATEGORY_CHOICES)
+    enabled = models.BooleanField(default=True)
+    mode = models.CharField(max_length=16, choices=MODE_CHOICES, default="mask")
+    token = models.CharField(max_length=40)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["folder", "category"], name="unique_rule_per_folder_category"),
+        ]
+
+    def __str__(self):
+        return f"{self.folder.name}:{self.category}"
 
 
 class ExportArtifact(models.Model):

@@ -7,7 +7,7 @@ from rest_framework.views import APIView
 from .categories import CATEGORY_META, CATEGORY_ORDER
 from .export import build_export, content_type_for
 from .ingest import run_ingestion
-from .models import CategoryRule, Entity, ExportArtifact, Job, Page
+from .models import CategoryRule, Entity, ExportArtifact, Folder, FolderCategoryRule, Job, Page
 from .payload import build_document_payload
 from .serializers import (
     BulkModeUpdateSerializer,
@@ -17,6 +17,11 @@ from .serializers import (
     EntityModeUpdateSerializer,
     EntitySerializer,
     ExportRequestSerializer,
+    FolderCategoryRulePatchSerializer,
+    FolderCategoryRuleSerializer,
+    FolderPatchSerializer,
+    FolderSerializer,
+    FolderWriteSerializer,
     JobPatchSerializer,
     JobSerializer,
     UploadSerializer,
@@ -25,6 +30,115 @@ from .serializers import (
 
 def _job_or_404(job_id):
     return get_object_or_404(Job, pk=job_id)
+
+
+def _folder_or_404(folder_id):
+    return get_object_or_404(Folder, pk=folder_id)
+
+
+class FolderListCreateView(APIView):
+    def get(self, request):
+        folders = Folder.objects.all()
+        return Response({"folders": FolderSerializer(folders, many=True).data})
+
+    def post(self, request):
+        serializer = FolderWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        name = serializer.validated_data["name"].strip()
+        parent = serializer.validated_data.get("parent")
+        if not name:
+            return Response({"detail": "Folder name cannot be blank."}, status=400)
+        if Folder.objects.filter(parent=parent, name__iexact=name).exists():
+            return Response({"detail": f'A folder named "{name}" already exists here.'}, status=400)
+        folder = Folder.objects.create(name=name, parent=parent)
+        return Response({"folder": FolderSerializer(folder).data}, status=201)
+
+
+class FolderDetailView(APIView):
+    def get(self, request, folder_id):
+        return Response({"folder": FolderSerializer(_folder_or_404(folder_id)).data})
+
+    def patch(self, request, folder_id):
+        folder = _folder_or_404(folder_id)
+        serializer = FolderPatchSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        target_parent = data["parent"] if "parent" in data else folder.parent
+        if "parent" in data:
+            new_parent = data["parent"]
+            if new_parent and (new_parent.pk == folder.pk or new_parent.pk in folder.descendant_ids()):
+                return Response(
+                    {"detail": "Cannot move a folder into itself or one of its own subfolders."}, status=400,
+                )
+
+        target_name = data["name"].strip() if "name" in data else folder.name
+        if "name" in data and not target_name:
+            return Response({"detail": "Folder name cannot be blank."}, status=400)
+
+        if ("name" in data or "parent" in data) and Folder.objects.filter(
+            parent=target_parent, name__iexact=target_name,
+        ).exclude(pk=folder.pk).exists():
+            return Response({"detail": f'A folder named "{target_name}" already exists here.'}, status=400)
+
+        if "name" in data:
+            folder.name = target_name
+        if "parent" in data:
+            folder.parent = data["parent"]
+        folder.save()
+        return Response({"folder": FolderSerializer(folder).data})
+
+    def delete(self, request, folder_id):
+        folder = _folder_or_404(folder_id)
+        recursive = request.query_params.get("recursive") == "true"
+        subfolder_count = folder.children.count()
+        document_count = folder.jobs.count()
+        if (subfolder_count or document_count) and not recursive:
+            return Response(
+                {
+                    "detail": "This folder is not empty. Pass ?recursive=true to delete it and everything inside.",
+                    "subfolder_count": subfolder_count,
+                    "document_count": document_count,
+                },
+                status=409,
+            )
+        folder.delete()
+        return Response(status=204)
+
+
+def _ensure_folder_rules(folder):
+    """Lazily seed a folder's default ruleset with one row per Safe Harbor
+    category the first time it's requested, so Config Rules always has
+    every category to show even before the user has touched anything."""
+    existing = {r.category for r in folder.rules.all()}
+    missing = [cat for cat in CATEGORY_ORDER if cat not in existing]
+    if missing:
+        FolderCategoryRule.objects.bulk_create([
+            FolderCategoryRule(folder=folder, category=cat, enabled=True, mode="mask", token=CATEGORY_META[cat]["token"])
+            for cat in missing
+        ])
+    rules = {r.category: r for r in folder.rules.all()}
+    return [rules[cat] for cat in CATEGORY_ORDER]
+
+
+class FolderRulesView(APIView):
+    def get(self, request, folder_id):
+        folder = _folder_or_404(folder_id)
+        rules = _ensure_folder_rules(folder)
+        return Response({"rules": FolderCategoryRuleSerializer(rules, many=True).data})
+
+
+class FolderRuleDetailView(APIView):
+    def patch(self, request, folder_id, category):
+        folder = _folder_or_404(folder_id)
+        _ensure_folder_rules(folder)
+        rule = get_object_or_404(FolderCategoryRule, folder=folder, category=category)
+        serializer = FolderCategoryRulePatchSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        for field, value in serializer.validated_data.items():
+            setattr(rule, field, value)
+        rule.save()
+        return Response({"rule": FolderCategoryRuleSerializer(rule).data})
 
 
 def _reject_if_complete(job):
@@ -40,6 +154,9 @@ def _reject_if_complete(job):
 class JobListCreateView(APIView):
     def get(self, request):
         jobs = Job.objects.all()
+        folder_param = request.query_params.get("folder")
+        if folder_param is not None:
+            jobs = jobs.filter(folder_id=None if folder_param in ("", "null") else folder_param)
         return Response({"jobs": JobSerializer(jobs, many=True).data})
 
     def post(self, request):
@@ -51,6 +168,7 @@ class JobListCreateView(APIView):
             filename=data["file"].name,
             uploaded_by=data.get("uploaded_by", ""),
             department=data.get("department", ""),
+            folder=data.get("folder"),
             preset=data.get("preset", "mask"),
             status="scanning",
         )

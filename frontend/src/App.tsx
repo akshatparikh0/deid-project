@@ -5,6 +5,7 @@ import { Layout } from './components/Layout';
 import { LoadingState } from './components/States';
 import { bootstrapAuth, getAuthStatusSnapshot, subscribeAuth } from './lib/auth';
 import { AuditPage } from './pages/AuditPage';
+import { ConfigRulesPage } from './pages/ConfigRulesPage';
 import { LoginPage } from './pages/LoginPage';
 import { QueuePage } from './pages/QueuePage';
 import { RegisterPage } from './pages/RegisterPage';
@@ -47,6 +48,7 @@ function App() {
       >
         <Route path="/" element={<Navigate to="/queue" replace />} />
         <Route path="/queue" element={<QueuePage />} />
+        <Route path="/folders/:id/rules" element={<ConfigRulesPage />} />
         <Route path="/upload" element={<UploadPage />} />
         <Route path="/jobs/:id/rules" element={<RulesPage />} />
         <Route path="/jobs/:id/review" element={<ReviewPage />} />

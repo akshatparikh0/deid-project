@@ -262,6 +262,17 @@ export function ReviewPage() {
               Mark complete
             </button>
           )}
+          <button
+            className="btn btn-sm"
+            title="Close file and return to document library"
+            onClick={() => {
+              setActiveJob(null);
+              navigate('/queue');
+            }}
+            style={{ marginLeft: 9, paddingLeft: 9, borderLeft: '1px solid var(--color-border)' }}
+          >
+            Close
+          </button>
         </div>
       </div>
 
@@ -319,12 +330,6 @@ export function ReviewPage() {
             readOnly={isComplete}
           />
         )}
-      </div>
-
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
-        <button className="btn btn-sm" onClick={() => navigate('/queue')}>
-          Back to library
-        </button>
       </div>
 
       {exportOpen && <ExportModal jobId={jobId} onClose={() => setExportOpen(false)} />}

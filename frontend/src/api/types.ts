@@ -28,12 +28,23 @@ export type Mode = 'redact' | 'mask' | 'pseudo' | 'keep';
 
 export type JobStatus = 'scanning' | 'in_review' | 'complete' | 'failed';
 
+export interface Folder {
+  id: number;
+  name: string;
+  parent: number | null;
+  subfolder_count: number;
+  document_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Job {
   id: number;
   code: string; // "JOB-0001"
   filename: string;
   uploaded_by: string;
   department: string;
+  folder: number | null;
   pages: number;
   status: JobStatus;
   error_message: string | null;
@@ -97,6 +108,15 @@ export interface CategoryRule {
   token: string; // e.g. "[NAME]" — used when mode === 'mask'
 }
 
+/** A patient folder's default ruleset, configured before any document is
+ * uploaded into it — no "found" counts yet since nothing has been scanned. */
+export interface FolderCategoryRule {
+  category: Category;
+  enabled: boolean;
+  mode: Mode;
+  token: string;
+}
+
 export interface AuditRow {
   entity_code: string;
   category: Category;
@@ -125,6 +145,14 @@ export interface JobsResponse {
   jobs: Job[];
 }
 
+export interface FolderResponse {
+  folder: Folder;
+}
+
+export interface FoldersResponse {
+  folders: Folder[];
+}
+
 export interface EntityResponse {
   entity: Entity;
 }
@@ -139,6 +167,14 @@ export interface RulesResponse {
 
 export interface RuleResponse {
   rule: CategoryRule;
+}
+
+export interface FolderRulesResponse {
+  rules: FolderCategoryRule[];
+}
+
+export interface FolderRuleResponse {
+  rule: FolderCategoryRule;
 }
 
 export interface ApplyRulesResponse {

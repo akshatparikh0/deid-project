@@ -3,6 +3,10 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
+    path("folders/", views.FolderListCreateView.as_view()),
+    path("folders/<int:folder_id>/", views.FolderDetailView.as_view()),
+    path("folders/<int:folder_id>/rules/", views.FolderRulesView.as_view()),
+    path("folders/<int:folder_id>/rules/<str:category>/", views.FolderRuleDetailView.as_view()),
     path("jobs/", views.JobListCreateView.as_view()),
     path("jobs/<int:job_id>/", views.JobDetailView.as_view()),
     path("jobs/<int:job_id>/document/", views.JobDocumentView.as_view()),

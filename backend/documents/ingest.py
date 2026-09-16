@@ -108,11 +108,15 @@ def run_ingestion(job, file_obj):
                     boxes=boxes,
                 )
 
+        folder_rules = {r.category: r for r in job.folder.rules.all()} if job.folder_id else {}
         CategoryRule.objects.bulk_create([
             CategoryRule(
-                job=job, category=cat, enabled=True,
-                mode=job.preset if job.preset != "keep" else "mask",
-                token=CATEGORY_META[cat]["token"],
+                job=job,
+                category=cat,
+                enabled=folder_rules[cat].enabled if cat in folder_rules else True,
+                mode=folder_rules[cat].mode if cat in folder_rules
+                    else (job.preset if job.preset != "keep" else "mask"),
+                token=folder_rules[cat].token if cat in folder_rules else CATEGORY_META[cat]["token"],
             )
             for cat in CATEGORY_ORDER
         ])

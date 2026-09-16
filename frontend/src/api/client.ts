@@ -8,6 +8,10 @@ import type {
   EntityResponse,
   ExportFormat,
   ExportResponse,
+  FolderResponse,
+  FolderRuleResponse,
+  FolderRulesResponse,
+  FoldersResponse,
   JobResponse,
   JobsResponse,
   DocumentPayload,
@@ -116,6 +120,7 @@ export interface CreateJobParams {
   file: File;
   uploaded_by?: string;
   department?: string;
+  folder?: number | null;
   preset?: Mode;
 }
 
@@ -124,12 +129,14 @@ export function createJob(params: CreateJobParams): Promise<JobResponse> {
   form.append('file', params.file);
   if (params.uploaded_by) form.append('uploaded_by', params.uploaded_by);
   if (params.department) form.append('department', params.department);
+  if (params.folder != null) form.append('folder', String(params.folder));
   if (params.preset) form.append('preset', params.preset);
   return request<JobResponse>('/jobs/', { method: 'POST', body: form });
 }
 
-export function listJobs(): Promise<JobsResponse> {
-  return request<JobsResponse>('/jobs/');
+export function listJobs(params?: { folder?: number | null }): Promise<JobsResponse> {
+  const qs = params && params.folder !== undefined ? `?folder=${params.folder === null ? 'null' : params.folder}` : '';
+  return request<JobsResponse>(`/jobs/${qs}`);
 }
 
 export function getJob(id: number): Promise<JobResponse> {
@@ -138,6 +145,64 @@ export function getJob(id: number): Promise<JobResponse> {
 
 export function getDocument(id: number): Promise<DocumentPayload> {
   return request<DocumentPayload>(`/jobs/${id}/document/`);
+}
+
+export function updateJob(
+  id: number,
+  patch: Partial<{ filename: string; folder: number | null; uploaded_by: string; department: string }>,
+): Promise<JobResponse> {
+  return request<JobResponse>(`/jobs/${id}/`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+}
+
+export function deleteJob(id: number): Promise<void> {
+  return request<void>(`/jobs/${id}/`, { method: 'DELETE' });
+}
+
+// ---- Folders ----
+
+export function listFolders(): Promise<FoldersResponse> {
+  return request<FoldersResponse>('/folders/');
+}
+
+export function createFolder(params: { name: string; parent: number | null }): Promise<FolderResponse> {
+  return request<FolderResponse>('/folders/', json({ name: params.name, parent: params.parent }));
+}
+
+export function updateFolder(
+  id: number,
+  patch: Partial<{ name: string; parent: number | null }>,
+): Promise<FolderResponse> {
+  return request<FolderResponse>(`/folders/${id}/`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+}
+
+export function deleteFolder(id: number, recursive?: boolean): Promise<void> {
+  return request<void>(`/folders/${id}/${recursive ? '?recursive=true' : ''}`, { method: 'DELETE' });
+}
+
+// ---- Folder rules (the default ruleset configured before upload) ----
+
+export function getFolderRules(folderId: number): Promise<FolderRulesResponse> {
+  return request<FolderRulesResponse>(`/folders/${folderId}/rules/`);
+}
+
+export function updateFolderRule(
+  folderId: number,
+  category: Category,
+  patch: Partial<{ enabled: boolean; mode: Mode; token: string }>,
+): Promise<FolderRuleResponse> {
+  return request<FolderRuleResponse>(`/folders/${folderId}/rules/${category}/`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
 }
 
 // ---- Entities ----
