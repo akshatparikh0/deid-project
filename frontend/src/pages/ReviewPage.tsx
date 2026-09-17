@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   ApiError,
   bulkUpdateEntities,
@@ -26,6 +26,12 @@ export function ReviewPage() {
   const { id } = useParams<{ id: string }>();
   const jobId = Number(id);
   const navigate = useNavigate();
+  const location = useLocation();
+  // Where "Close" goes back to depends on how this document was opened —
+  // set by the caller's navigate(..., { state: { from } }) — not just
+  // whether the job has a batch, so opening the same job from the document
+  // library always returns there even if it came from a batch upload.
+  const openedFrom = (location.state as { from?: 'status' | 'queue' } | null)?.from;
 
   const [job, setJob] = useState<Job | null>(null);
   const [doc, setDoc] = useState<DocumentPayload | null>(null);
@@ -264,10 +270,15 @@ export function ReviewPage() {
           )}
           <button
             className="btn btn-sm"
-            title="Close file and return to document library"
+            title={
+              openedFrom === 'status' && job.batch != null
+                ? 'Close file and return to upload status'
+                : 'Close file and return to document library'
+            }
             onClick={() => {
+              const dest = openedFrom === 'status' && job.batch != null ? `/uploads/${job.batch}/status` : '/queue';
               setActiveJob(null);
-              navigate('/queue');
+              navigate(dest);
             }}
             style={{ marginLeft: 9, paddingLeft: 9, borderLeft: '1px solid var(--color-border)' }}
           >

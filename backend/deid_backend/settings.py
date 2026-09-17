@@ -93,6 +93,10 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
+        # Background ingestion threads (documents/tasks.py) write concurrently
+        # with request threads — wait up to 20s for a lock instead of raising
+        # "database is locked" immediately.
+        'OPTIONS': {'timeout': 20},
     }
 }
 

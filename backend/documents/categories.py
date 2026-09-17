@@ -56,6 +56,27 @@ JOB_STATUS_CHOICES = [
     ("failed", "Failed"),
 ]
 
+# The pipeline stages a job passes through while status="scanning", in the
+# order they run. Each name corresponds to a real, distinct unit of work in
+# ingest.py — not a cosmetic label — so a stage's start/finish timestamps
+# reflect actual processing time the Status page can show the user.
+STAGE_ORDER = ["ingest", "parse", "detect", "transform", "finalize"]
+
+STAGE_CHOICES = [
+    ("ingest", "Ingest"),
+    ("parse", "Parse"),
+    ("detect", "Detect"),
+    ("transform", "Transform"),
+    ("finalize", "Finalize"),
+]
+
+STAGE_STATUS_CHOICES = [
+    ("pending", "Pending"),
+    ("running", "Running"),
+    ("done", "Done"),
+    ("failed", "Failed"),
+]
+
 BLOCK_TYPE_CHOICES = [
     ("title", "Title"),
     ("sub", "Subtitle"),

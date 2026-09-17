@@ -30,6 +30,14 @@ export function formatPercent(value: number): string {
   return `${Math.round(value * 100)}%`;
 }
 
+export function formatDuration(seconds: number): string {
+  if (seconds < 10) return `${seconds.toFixed(1)}s`;
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainder = Math.round(seconds % 60);
+  return `${minutes}m ${remainder}s`;
+}
+
 export function formatStatus(status: string): string {
   return status
     .split('_')

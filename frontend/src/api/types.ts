@@ -28,6 +28,20 @@ export type Mode = 'redact' | 'mask' | 'pseudo' | 'keep';
 
 export type JobStatus = 'scanning' | 'in_review' | 'complete' | 'failed';
 
+export type StageName = 'ingest' | 'parse' | 'detect' | 'transform' | 'finalize';
+
+export type StageStatus = 'pending' | 'running' | 'done' | 'failed';
+
+export interface JobStage {
+  name: StageName;
+  sequence: number;
+  status: StageStatus;
+  started_at: string | null;
+  finished_at: string | null;
+  duration_seconds: number | null;
+  error_message: string | null;
+}
+
 export interface Folder {
   id: number;
   name: string;
@@ -45,6 +59,7 @@ export interface Job {
   uploaded_by: string;
   department: string;
   folder: number | null;
+  batch: number | null; // the UploadBatch this job was created from, if any
   pages: number;
   status: JobStatus;
   error_message: string | null;
@@ -54,6 +69,24 @@ export interface Job {
   confidence_threshold: number; // 0..1
   created_at: string; // ISO datetime
   updated_at: string;
+  stages?: JobStage[]; // only present on jobs nested inside an UploadBatch response
+}
+
+export interface UploadBatch {
+  id: number;
+  folder: number | null;
+  uploaded_by: string;
+  department: string;
+  preset: Mode;
+  created_at: string;
+  total: number; // jobs in this batch
+  finished: number; // jobs no longer 'scanning' (in_review, complete, or failed)
+  jobs: Job[];
+}
+
+export interface RejectedUpload {
+  filename: string;
+  reason: string;
 }
 
 export interface EntityBox {
@@ -143,6 +176,15 @@ export interface JobResponse {
 
 export interface JobsResponse {
   jobs: Job[];
+}
+
+export interface UploadBatchResponse {
+  batch: UploadBatch;
+}
+
+export interface CreateBatchResponse {
+  batch: UploadBatch;
+  rejected: RejectedUpload[];
 }
 
 export interface FolderResponse {

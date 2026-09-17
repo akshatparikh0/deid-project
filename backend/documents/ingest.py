@@ -6,20 +6,24 @@ Review screen can draw redaction/highlight boxes on the real rendered page
 image), one Page row per page image, and seed one CategoryRule per
 canonical Safe Harbor category.
 
-Runs synchronously inside the request — fine at this document scale/traffic
-level. A production deployment processing large batches would move this
-onto a task queue (Celery/RQ) and let the job sit in "scanning" until a
-worker picks it up; the model already has that status for exactly this
-reason.
+Runs on a background thread (see tasks.py), advancing job.status through the
+parse/detect/transform/finalize stages (categories.STAGE_ORDER) and recording
+each one's start/finish on a JobStage row so the Status page can poll live
+per-stage progress and timing for many jobs at once.
 """
+import logging
+
 from django.core.files.base import ContentFile
 from django.db import transaction
+from django.utils import timezone
 
-from .categories import CATEGORY_META, CATEGORY_ORDER
+from .categories import CATEGORY_META, CATEGORY_ORDER, STAGE_ORDER
 from .detection import detect_spans
 from .extraction import ExtractionError, extract_blocks
-from .models import CategoryRule, DocumentBlock, Entity, Page
+from .models import CategoryRule, DocumentBlock, Entity, JobStage, Page
 from .surrogates import make_surrogate
+
+logger = logging.getLogger(__name__)
 
 _LINE_TOLERANCE = 2.0  # points; matches extraction.py's line clustering
 
@@ -45,80 +49,176 @@ def _line_group_boxes(words, start, end):
     return lines
 
 
+def _start_stage(job, name):
+    """get_or_create (rather than a strict get) means run_ingestion stays
+    independently callable without a prior seed_stages() call — exactly how
+    the ingest test suite invokes it today — so no test fixture needed to
+    change for this refactor."""
+    stage, _ = JobStage.objects.get_or_create(
+        job=job, name=name, defaults={"sequence": STAGE_ORDER.index(name) + 1},
+    )
+    stage.status = "running"
+    stage.started_at = timezone.now()
+    stage.finished_at = None
+    stage.error_message = None
+    stage.save(update_fields=["status", "started_at", "finished_at", "error_message"])
+    return stage
+
+
+def _finish_stage(stage):
+    stage.status = "done"
+    stage.finished_at = timezone.now()
+    stage.save(update_fields=["status", "finished_at"])
+
+
+def _fail_stage(stage, message):
+    stage.status = "failed"
+    stage.finished_at = timezone.now()
+    stage.error_message = message
+    stage.save(update_fields=["status", "finished_at", "error_message"])
+
+
+def _fail_job(job, message, pages=None):
+    job.status = "failed"
+    job.error_message = message
+    fields = ["status", "error_message"]
+    if pages is not None:
+        job.pages = pages
+        fields.append("pages")
+    job.save(update_fields=fields)
+
+
+def _spans_for_block(raw):
+    """Runs PHI detection over one extracted block, returning
+    [(span, boxes), ...] — boxes already mapped onto the block's page-
+    coordinate geometry so entities can be persisted directly from this."""
+    spans_with_boxes = []
+    if raw.get("cells"):
+        for cell in raw["cells"]:
+            cell_text = raw["text"][cell["start"]:cell["end"]]
+            cell_box = [{"x0": cell["x0"], "top": cell["top"], "x1": cell["x1"], "bottom": cell["bottom"]}]
+            for span in detect_spans(cell_text, column_header=cell["header"]):
+                adjusted = {**span, "start": span["start"] + cell["start"], "end": span["end"] + cell["start"]}
+                spans_with_boxes.append((adjusted, cell_box))
+    else:
+        words = raw.get("words", [])
+        for span in detect_spans(raw["text"]):
+            spans_with_boxes.append((span, _line_group_boxes(words, span["start"], span["end"])))
+    return spans_with_boxes
+
+
 def run_ingestion(job, file_obj):
-    """Populate `job` (already saved, status='scanning') from `file_obj`.
-    On success, blocks/entities/rules/pages are created and job.status
-    becomes 'in_review'. On failure, job.status becomes 'failed' with
-    error_message set. Either way the job is saved before returning."""
+    """Populate `job` (already saved, status='scanning') from `file_obj`,
+    advancing it through parse -> detect -> transform -> finalize. On
+    success, blocks/entities/rules/pages are created and job.status becomes
+    'in_review' with rules already applied (see the 'finalize' stage below).
+    On failure, job.status becomes 'failed' with error_message set, and the
+    stage that failed is recorded. Either way the job is saved before
+    returning."""
+    parse_stage = _start_stage(job, "parse")
     try:
         page_count, raw_blocks, raw_pages = extract_blocks(file_obj)
     except ExtractionError as exc:
-        job.status = "failed"
-        job.error_message = str(exc)
-        job.pages = 0
-        job.save(update_fields=["status", "error_message", "pages"])
+        _fail_stage(parse_stage, str(exc))
+        _fail_job(job, str(exc), pages=0)
         return job
+    except Exception:
+        logger.exception("Unexpected error parsing job %s", job.id)
+        message = "An unexpected error occurred while parsing this PDF."
+        _fail_stage(parse_stage, message)
+        _fail_job(job, message, pages=0)
+        return job
+    _finish_stage(parse_stage)
 
-    with transaction.atomic():
-        job.pages = page_count
-        job.status = "in_review"
-        job.error_message = None
-        job.save(update_fields=["pages", "status", "error_message"])
+    detect_stage = _start_stage(job, "detect")
+    try:
+        # [(raw_block, [(span, boxes), ...]), ...] — kept in memory; nothing
+        # is persisted until 'finalize' so a mid-stage failure leaves no
+        # partial rows behind.
+        detected = [(raw, _spans_for_block(raw)) for raw in raw_blocks]
+    except Exception:
+        logger.exception("Unexpected error detecting PHI for job %s", job.id)
+        message = "An unexpected error occurred while detecting identifiers."
+        _fail_stage(detect_stage, message)
+        _fail_job(job, message)
+        return job
+    _finish_stage(detect_stage)
 
-        for raw_page in raw_pages:
-            page = Page(job=job, number=raw_page["number"], width=raw_page["width"], height=raw_page["height"])
-            page.image.save(f"page-{raw_page['number']}.png", ContentFile(raw_page["png"]), save=False)
-            page.save()
-
-        entity_seq = 0
+    transform_stage = _start_stage(job, "transform")
+    try:
         surrogate_cache = {}
-
-        for raw in raw_blocks:
-            block = DocumentBlock.objects.create(
-                job=job, index=raw["index"], page=raw["page"],
-                type=raw["type"], text=raw["text"], source=raw.get("source", "text"),
-            )
-
-            spans_with_boxes = []
-            if raw.get("cells"):
-                for cell in raw["cells"]:
-                    cell_text = raw["text"][cell["start"]:cell["end"]]
-                    cell_box = [{"x0": cell["x0"], "top": cell["top"], "x1": cell["x1"], "bottom": cell["bottom"]}]
-                    for span in detect_spans(cell_text, column_header=cell["header"]):
-                        adjusted = {**span, "start": span["start"] + cell["start"], "end": span["end"] + cell["start"]}
-                        spans_with_boxes.append((adjusted, cell_box))
-            else:
-                words = raw.get("words", [])
-                for span in detect_spans(raw["text"]):
-                    spans_with_boxes.append((span, _line_group_boxes(words, span["start"], span["end"])))
-
-            for span, boxes in spans_with_boxes:
-                entity_seq += 1
+        for raw, spans_with_boxes in detected:
+            for span, _boxes in spans_with_boxes:
                 value = raw["text"][span["start"]:span["end"]]
                 cache_key = (span["category"], value.lower())
                 if cache_key not in surrogate_cache:
                     surrogate_cache[cache_key] = make_surrogate(span["category"], value)
-                Entity.objects.create(
-                    job=job, block=block, code=f"E-{entity_seq:02d}",
-                    category=span["category"], value=value,
-                    surrogate_value=surrogate_cache[cache_key],
-                    mode=job.preset, confidence=span["confidence"],
-                    page=raw["page"], detector=span["detector"],
-                    start_in_block=span["start"], end_in_block=span["end"],
-                    boxes=boxes,
-                )
+    except Exception:
+        logger.exception("Unexpected error generating surrogates for job %s", job.id)
+        message = "An unexpected error occurred while transforming identifiers."
+        _fail_stage(transform_stage, message)
+        _fail_job(job, message)
+        return job
+    _finish_stage(transform_stage)
 
-        folder_rules = {r.category: r for r in job.folder.rules.all()} if job.folder_id else {}
-        CategoryRule.objects.bulk_create([
-            CategoryRule(
-                job=job,
-                category=cat,
-                enabled=folder_rules[cat].enabled if cat in folder_rules else True,
-                mode=folder_rules[cat].mode if cat in folder_rules
-                    else (job.preset if job.preset != "keep" else "mask"),
-                token=folder_rules[cat].token if cat in folder_rules else CATEGORY_META[cat]["token"],
-            )
-            for cat in CATEGORY_ORDER
-        ])
+    finalize_stage = _start_stage(job, "finalize")
+    try:
+        with transaction.atomic():
+            job.pages = page_count
+            job.status = "in_review"
+            job.error_message = None
+            job.save(update_fields=["pages", "status", "error_message"])
+
+            for raw_page in raw_pages:
+                page = Page(job=job, number=raw_page["number"], width=raw_page["width"], height=raw_page["height"])
+                page.image.save(f"page-{raw_page['number']}.png", ContentFile(raw_page["png"]), save=False)
+                page.save()
+
+            entity_seq = 0
+            for raw, spans_with_boxes in detected:
+                block = DocumentBlock.objects.create(
+                    job=job, index=raw["index"], page=raw["page"],
+                    type=raw["type"], text=raw["text"], source=raw.get("source", "text"),
+                )
+                for span, boxes in spans_with_boxes:
+                    entity_seq += 1
+                    value = raw["text"][span["start"]:span["end"]]
+                    cache_key = (span["category"], value.lower())
+                    Entity.objects.create(
+                        job=job, block=block, code=f"E-{entity_seq:02d}",
+                        category=span["category"], value=value,
+                        surrogate_value=surrogate_cache[cache_key],
+                        mode=job.preset, confidence=span["confidence"],
+                        page=raw["page"], detector=span["detector"],
+                        start_in_block=span["start"], end_in_block=span["end"],
+                        boxes=boxes,
+                    )
+
+            folder_rules = {r.category: r for r in job.folder.rules.all()} if job.folder_id else {}
+            CategoryRule.objects.bulk_create([
+                CategoryRule(
+                    job=job,
+                    category=cat,
+                    enabled=folder_rules[cat].enabled if cat in folder_rules else True,
+                    mode=folder_rules[cat].mode if cat in folder_rules
+                        else (job.preset if job.preset != "keep" else "mask"),
+                    token=folder_rules[cat].token if cat in folder_rules else CATEGORY_META[cat]["token"],
+                )
+                for cat in CATEGORY_ORDER
+            ])
+
+            # Equivalent to the old client-triggered POST /rules/apply/ step
+            # (JobRulesApplyView), folded into the pipeline itself: a batch of
+            # jobs has no per-job human checkpoint between scan and review, so
+            # a job reaching 'in_review' must already be fully review-ready.
+            for rule in job.rules.filter(enabled=True):
+                job.entities.filter(category=rule.category).update(mode=rule.mode)
+    except Exception:
+        logger.exception("Unexpected error finalizing job %s", job.id)
+        message = "An unexpected error occurred while saving results."
+        _fail_stage(finalize_stage, message)
+        _fail_job(job, message)
+        return job
+    _finish_stage(finalize_stage)
 
     return job

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { useSyncExternalStore } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
+  getActiveBatchSnapshot,
   getActiveFolderSnapshot,
   getActiveJobSnapshot,
   getQueueCountSnapshot,
@@ -19,6 +20,7 @@ export function Layout() {
   const activeFolder = useSyncExternalStore(subscribeActiveJob, getActiveFolderSnapshot);
   const queueCount = useSyncExternalStore(subscribeActiveJob, getQueueCountSnapshot);
   const uploadReadyFolderId = useSyncExternalStore(subscribeActiveJob, getUploadReadySnapshot);
+  const activeBatchId = useSyncExternalStore(subscribeActiveJob, getActiveBatchSnapshot);
   const user = useSyncExternalStore(subscribeAuth, getAuthUserSnapshot);
 
   async function onLogout() {
@@ -31,6 +33,7 @@ export function Layout() {
   const uploadPath =
     activeFolder && uploadReadyFolderId === activeFolder.id ? `/upload?folder=${activeFolder.id}` : null;
   const reviewPath = activeJob ? routeForJobStatus(activeJob.id, activeJob.status) : null;
+  const statusPath = activeBatchId != null ? `/uploads/${activeBatchId}/status` : null;
 
   const items = [
     {
@@ -56,6 +59,13 @@ export function Layout() {
     },
     {
       num: '04',
+      label: 'Status',
+      badge: '',
+      to: statusPath,
+      active: statusPath !== null && path === statusPath,
+    },
+    {
+      num: '05',
       label: 'Review',
       badge: activeJob ? String(activeJob.entityCount) : '',
       to: reviewPath,

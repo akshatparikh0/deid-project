@@ -7,9 +7,10 @@ from rest_framework.views import APIView
 from .categories import CATEGORY_META, CATEGORY_ORDER
 from .export import build_export, content_type_for
 from .ingest import run_ingestion
-from .models import CategoryRule, Entity, ExportArtifact, Folder, FolderCategoryRule, Job, Page
+from .models import CategoryRule, Entity, ExportArtifact, Folder, FolderCategoryRule, Job, Page, UploadBatch
 from .payload import build_document_payload
 from .serializers import (
+    BatchUploadSerializer,
     BulkModeUpdateSerializer,
     CategoryRulePatchSerializer,
     CategoryRuleSerializer,
@@ -24,8 +25,10 @@ from .serializers import (
     FolderWriteSerializer,
     JobPatchSerializer,
     JobSerializer,
+    UploadBatchSerializer,
     UploadSerializer,
 )
+from .tasks import seed_stages, submit_job
 
 
 def _job_or_404(job_id):
@@ -179,6 +182,77 @@ class JobListCreateView(APIView):
 
         job.refresh_from_db()
         return Response({"job": JobSerializer(job).data}, status=201)
+
+
+_MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+
+
+class UploadBatchListCreateView(APIView):
+    """Accepts several PDFs (or a whole folder's worth, flattened client-
+    side) in one request, creating one Job per valid file and handing each
+    off to a background worker (see tasks.py) instead of processing inline —
+    the response returns as soon as files are saved, not once they're
+    scanned. GET /api/uploads/<id>/ (UploadBatchDetailView) is what the
+    frontend Status page polls afterwards."""
+
+    def post(self, request):
+        serializer = BatchUploadSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        batch = UploadBatch.objects.create(
+            folder=data["folder"],
+            uploaded_by=data.get("uploaded_by", ""),
+            department=data.get("department", ""),
+            preset=data.get("preset", "mask"),
+        )
+
+        rejected = []
+        for f in data["files"]:
+            if not f.name.lower().endswith(".pdf"):
+                rejected.append({"filename": f.name, "reason": "Only PDF files are supported."})
+                continue
+            if f.size > _MAX_UPLOAD_BYTES:
+                rejected.append({"filename": f.name, "reason": "File exceeds the 50 MB limit."})
+                continue
+
+            job = Job.objects.create(
+                filename=f.name,
+                batch=batch,
+                folder=batch.folder,
+                uploaded_by=batch.uploaded_by,
+                department=batch.department,
+                preset=batch.preset,
+                status="scanning",
+            )
+            job.file.save(f.name, f, save=True)  # "ingest" stage — must stay synchronous (see tasks.seed_stages)
+            seed_stages(job)
+            submit_job(job.id)
+
+        if not batch.jobs.exists():
+            batch.delete()
+            return Response({"detail": "No valid PDF files were uploaded.", "rejected": rejected}, status=400)
+
+        return Response({"batch": UploadBatchSerializer(batch).data, "rejected": rejected}, status=202)
+
+
+class UploadBatchDetailView(APIView):
+    def get(self, request, batch_id):
+        batch = get_object_or_404(UploadBatch, pk=batch_id)
+        return Response({"batch": UploadBatchSerializer(batch).data})
+
+
+class JobRetryView(APIView):
+    def post(self, request, job_id):
+        job = _job_or_404(job_id)
+        if job.status != "failed":
+            return Response({"detail": "Only failed jobs can be retried."}, status=409)
+        job.status = "scanning"
+        job.error_message = None
+        job.save(update_fields=["status", "error_message"])
+        seed_stages(job)
+        submit_job(job.id)
+        return Response({"job": JobSerializer(job).data}, status=202)
 
 
 class JobDetailView(APIView):

@@ -1,6 +1,7 @@
 import hashlib
 
 from django.db import models
+from django.utils import timezone
 
 from .categories import (
     BLOCK_SOURCE_CHOICES,
@@ -9,6 +10,8 @@ from .categories import (
     CATEGORY_META,
     JOB_STATUS_CHOICES,
     MODE_CHOICES,
+    STAGE_CHOICES,
+    STAGE_STATUS_CHOICES,
 )
 
 
@@ -52,11 +55,27 @@ class Folder(models.Model):
         return ids
 
 
+class UploadBatch(models.Model):
+    """A set of PDFs uploaded together (multi-file or whole-folder upload).
+    Exists so the Status page can be reloaded/refreshed and still show every
+    file from that upload, even though each file becomes its own independent
+    Job that processes and can be reviewed on its own schedule."""
+    folder = models.ForeignKey(Folder, null=True, blank=True, related_name="upload_batches", on_delete=models.CASCADE)
+    uploaded_by = models.CharField(max_length=120, blank=True, default="")
+    department = models.CharField(max_length=120, blank=True, default="")
+    preset = models.CharField(max_length=16, choices=MODE_CHOICES, default="mask")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
 class Job(models.Model):
     filename = models.CharField(max_length=255)
     uploaded_by = models.CharField(max_length=120, blank=True, default="")
     department = models.CharField(max_length=120, blank=True, default="")
     folder = models.ForeignKey(Folder, null=True, blank=True, related_name="jobs", on_delete=models.CASCADE)
+    batch = models.ForeignKey(UploadBatch, null=True, blank=True, related_name="jobs", on_delete=models.SET_NULL)
     pages = models.PositiveIntegerField(default=0)
     status = models.CharField(max_length=16, choices=JOB_STATUS_CHOICES, default="scanning")
     error_message = models.TextField(null=True, blank=True)
@@ -90,6 +109,31 @@ class Job(models.Model):
         for page in self.page_images.all():
             page.image.delete(save=False)
         self.page_images.all().delete()
+
+
+class JobStage(models.Model):
+    """One step of the pipeline (see categories.STAGE_ORDER) for a single
+    job, timestamped as it starts/finishes so the Status page can show live
+    per-stage progress and duration while a job's status is 'scanning'."""
+    job = models.ForeignKey(Job, related_name="stages", on_delete=models.CASCADE)
+    name = models.CharField(max_length=16, choices=STAGE_CHOICES)
+    sequence = models.PositiveSmallIntegerField()
+    status = models.CharField(max_length=10, choices=STAGE_STATUS_CHOICES, default="pending")
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    error_message = models.TextField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["sequence"]
+        constraints = [
+            models.UniqueConstraint(fields=["job", "name"], name="unique_stage_per_job"),
+        ]
+
+    @property
+    def duration_seconds(self):
+        if not self.started_at:
+            return None
+        return ((self.finished_at or timezone.now()) - self.started_at).total_seconds()
 
 
 class DocumentBlock(models.Model):

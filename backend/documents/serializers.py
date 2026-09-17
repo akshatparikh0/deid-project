@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from .categories import MODE_CHOICES
-from .models import CategoryRule, Entity, Folder, FolderCategoryRule, Job
+from .models import CategoryRule, Entity, Folder, FolderCategoryRule, Job, JobStage, UploadBatch
 
 
 class FolderSerializer(serializers.ModelSerializer):
@@ -48,11 +48,14 @@ class JobSerializer(serializers.ModelSerializer):
     entity_count = serializers.SerializerMethodField()
     unresolved_count = serializers.SerializerMethodField()
     class_count = serializers.SerializerMethodField()
+    # Read-only FK id, not the batch object — lets a scanning/failed job in
+    # QueuePage route to its batch's Status page (see lib/jobRoute.ts).
+    batch = serializers.IntegerField(source="batch_id", read_only=True)
 
     class Meta:
         model = Job
         fields = [
-            "id", "code", "filename", "uploaded_by", "department", "folder", "pages",
+            "id", "code", "filename", "uploaded_by", "department", "folder", "batch", "pages",
             "status", "error_message", "entity_count", "unresolved_count",
             "class_count", "confidence_threshold", "created_at", "updated_at",
         ]
@@ -165,3 +168,53 @@ class UploadSerializer(serializers.Serializer):
         if value.level != 1:
             raise serializers.ValidationError("Documents can only be uploaded into a patient folder.")
         return value
+
+
+class JobStageSerializer(serializers.ModelSerializer):
+    duration_seconds = serializers.SerializerMethodField()
+
+    class Meta:
+        model = JobStage
+        fields = ["name", "sequence", "status", "started_at", "finished_at", "duration_seconds", "error_message"]
+
+    def get_duration_seconds(self, obj):
+        return obj.duration_seconds
+
+
+class JobWithStagesSerializer(JobSerializer):
+    """JobSerializer plus its live stage timeline — used only by the Status
+    page's batch endpoint, kept off the base JobSerializer so pages that just
+    need job summaries (Queue, Review, Audit) don't pay for the extra query."""
+    stages = JobStageSerializer(many=True, read_only=True)
+
+    class Meta(JobSerializer.Meta):
+        fields = JobSerializer.Meta.fields + ["stages"]
+
+
+class BatchUploadSerializer(serializers.Serializer):
+    files = serializers.ListField(child=serializers.FileField(), allow_empty=False)
+    uploaded_by = serializers.CharField(required=False, allow_blank=True, max_length=120, default="")
+    department = serializers.CharField(required=False, allow_blank=True, max_length=120, default="")
+    folder = serializers.PrimaryKeyRelatedField(queryset=Folder.objects.all())
+    preset = serializers.ChoiceField(choices=MODE_CHOICES, required=False, default="mask")
+
+    def validate_folder(self, value):
+        if value.level != 1:
+            raise serializers.ValidationError("Documents can only be uploaded into a patient folder.")
+        return value
+
+
+class UploadBatchSerializer(serializers.ModelSerializer):
+    jobs = JobWithStagesSerializer(many=True, read_only=True)
+    total = serializers.SerializerMethodField()
+    finished = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UploadBatch
+        fields = ["id", "folder", "uploaded_by", "department", "preset", "created_at", "total", "finished", "jobs"]
+
+    def get_total(self, obj):
+        return obj.jobs.count()
+
+    def get_finished(self, obj):
+        return obj.jobs.exclude(status="scanning").count()

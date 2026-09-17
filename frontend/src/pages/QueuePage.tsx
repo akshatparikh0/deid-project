@@ -23,7 +23,7 @@ import { routeForJobStatus } from '../lib/jobRoute';
 import { showToast } from '../lib/toast';
 
 function routeForJob(job: Job): string | null {
-  return routeForJobStatus(job.id, job.status);
+  return routeForJobStatus(job.id, job.status, job.batch);
 }
 
 /** By convention the top level holds projects and the next level holds
@@ -292,7 +292,7 @@ export function QueuePage() {
                   <tr
                     key={job.id}
                     className={dest ? 'clickable' : undefined}
-                    onClick={dest ? () => navigate(dest) : undefined}
+                    onClick={dest ? () => navigate(dest, { state: { from: 'queue' } }) : undefined}
                   >
                     <td>
                       <div style={{ fontWeight: 500 }}>{job.filename}</div>
