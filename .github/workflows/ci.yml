@@ -83,6 +83,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: azure/setup-bicep@v1
+      - name: Install Bicep CLI
+        # No marketplace action for this (azure/setup-bicep doesn't exist).
+        # Downloads the standalone compiler binary directly from its GitHub
+        # releases — no Azure login or credentials needed for a local
+        # compile. Verified locally: `bicep build <file> --outfile <out>`
+        # (positional input path, not --file).
+        run: |
+          curl -fsSL -o /usr/local/bin/bicep https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64
+          chmod +x /usr/local/bin/bicep
+          bicep --version
       - name: Compile Bicep (syntax + type check only — no Azure credentials in CI)
         run: bicep build infra/main.bicep --outfile /tmp/main.json
