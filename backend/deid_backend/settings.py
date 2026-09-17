@@ -89,16 +89,33 @@ WSGI_APPLICATION = 'deid_backend.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-        # Background ingestion threads (documents/tasks.py) write concurrently
+# No DATABASE_URL configured -> local SQLite (the default for dev and the
+# test suite, which need no extra services). FR-58 names Azure Database for
+# PostgreSQL as the production store: set
+# DATABASE_URL=postgres://user:pass@host:5432/dbname (docker-compose.yml
+# and infra/main.bicep both do this) to use it instead — dj-database-url
+# parses the same URL scheme every other framework uses, so no separate
+# Django-specific config is needed per environment.
+if os.environ.get('DATABASE_URL'):
+    import dj_database_url
+    DATABASES = {
+        'default': dj_database_url.parse(
+            os.environ['DATABASE_URL'],
+            conn_max_age=600,
+            ssl_require=os.environ.get('DATABASE_SSL_REQUIRE', 'False').lower() == 'true',
+        )
+    }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+            # Background ingestion threads (documents/tasks.py) write concurrently
         # with request threads — wait up to 20s for a lock instead of raising
         # "database is locked" immediately.
         'OPTIONS': {'timeout': 20},
     }
-}
+    }
 
 
 # Password validation
@@ -136,6 +153,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -173,3 +191,94 @@ CORS_ALLOWED_ORIGINS = [
     *[o for o in os.environ.get('DJANGO_CORS_ALLOWED_ORIGINS', '').split(',') if o],
 ]
 CORS_ALLOW_ALL_ORIGINS = DEBUG
+
+REDACTION_POLICY_PATH = os.environ.get(
+    "REDACTION_POLICY_PATH",
+    str(BASE_DIR / "config" / "default_policy.json"),
+)
+
+REDACTION_ENABLE_AI = (
+    os.environ.get("REDACTION_ENABLE_AI", "False").lower() == "true"
+)
+
+REDACTION_ENABLE_AZURE_LANGUAGE = (
+    os.environ.get(
+        "REDACTION_ENABLE_AZURE_LANGUAGE",
+        "False",
+    ).lower() == "true"
+)
+
+REDACTION_ENABLE_AZURE_OCR = (
+    os.environ.get(
+        "REDACTION_ENABLE_AZURE_OCR",
+        "False",
+    ).lower() == "true"
+)
+
+REDACTION_FORCE_OCR = (
+    os.environ.get("REDACTION_FORCE_OCR", "False").lower() == "true"
+)
+
+# --- Async processing (FR-56/FR-57) -----------------------------------
+# No broker configured -> every Celery task runs synchronously in-process
+# (CELERY_TASK_ALWAYS_EAGER), identical to the original request-blocking
+# behavior — so local dev and the test suite need no extra services. Set
+# CELERY_BROKER_URL (redis://... for local/staging, or
+# azureservicebus://... in production, via kombu's transport) to run real
+# out-of-request workers; start one with `celery -A deid_backend worker`.
+CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "")
+CELERY_RESULT_BACKEND = os.environ.get("CELERY_RESULT_BACKEND", CELERY_BROKER_URL or None)
+CELERY_TASK_ALWAYS_EAGER = (
+    os.environ.get("CELERY_TASK_ALWAYS_EAGER", "" if CELERY_BROKER_URL else "True").lower() == "true"
+)
+CELERY_TASK_EAGER_PROPAGATES = True
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_TASK_DEFAULT_QUEUE = os.environ.get("CELERY_TASK_DEFAULT_QUEUE", "deid-ingest")
+
+# --- Storage adapters (FR-67 – FR-75) ----------------------------------
+# One Django Storage backend per provider (django-storages), selected here
+# and nowhere else — pipeline code (documents/ingest.py, finalize.py, ...)
+# only ever calls the FileField API (`.open()`, `.save()`, `.url`), never a
+# provider SDK directly (NFR-15). STORAGE_PROVIDER: "local" (default,
+# filesystem under MEDIA_ROOT) | "azure_blob" | "s3" | "gcs".
+STORAGE_PROVIDER = os.environ.get("STORAGE_PROVIDER", "local")
+
+_STORAGE_BACKENDS = {
+    "local": "django.core.files.storage.FileSystemStorage",
+    "azure_blob": "storages.backends.azure_storage.AzureStorage",
+    "s3": "storages.backends.s3boto3.S3Boto3Storage",
+    "gcs": "storages.backends.gcloud.GoogleCloudStorage",
+}
+
+STORAGES = {
+    "default": {"BACKEND": _STORAGE_BACKENDS.get(STORAGE_PROVIDER, _STORAGE_BACKENDS["local"])},
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+}
+
+if STORAGE_PROVIDER == "azure_blob":
+    # FR-67/FR-68: Azure Blob Storage is the primary/reference store.
+    AZURE_ACCOUNT_NAME = os.environ.get("AZURE_STORAGE_ACCOUNT", "")
+    AZURE_CONTAINER = os.environ.get("AZURE_STORAGE_CONTAINER", "deid-media")
+    _azure_connection_string = os.environ.get("AZURE_STORAGE_CONNECTION_STRING", "")
+    if _azure_connection_string:
+        AZURE_CONNECTION_STRING = _azure_connection_string
+    else:
+        # No static connection string -> authenticate with the container
+        # app's user-assigned managed identity (FR-62), matching every
+        # other Azure client in this project.
+        from azure.identity import DefaultAzureCredential
+        AZURE_TOKEN_CREDENTIAL = DefaultAzureCredential()
+elif STORAGE_PROVIDER == "s3":
+    # FR-69/FR-71: Amazon S3, secondary/portable store.
+    AWS_STORAGE_BUCKET_NAME = os.environ.get("AWS_STORAGE_BUCKET_NAME", "")
+    AWS_S3_REGION_NAME = os.environ.get("AWS_S3_REGION_NAME", "")
+    AWS_DEFAULT_ACL = None  # private by default (FR-74)
+    AWS_S3_ADDRESSING_STYLE = "virtual"
+elif STORAGE_PROVIDER == "gcs":
+    # FR-70/FR-71: Google Cloud Storage, secondary/portable store.
+    GS_BUCKET_NAME = os.environ.get("GS_BUCKET_NAME", "")
+    GS_PROJECT_ID = os.environ.get("GCS_PROJECT_ID", "")
+    GS_DEFAULT_ACL = None

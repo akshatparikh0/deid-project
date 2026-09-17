@@ -140,7 +140,7 @@ export function UploadPage() {
         <div style={{ width: '100%', maxWidth: 680 }}>
           <PageHeader
             title="New de-identification job"
-            subtitle="Files are processed in an isolated enclave. Source documents are purged after export."
+            subtitle="Files are processed in an isolated enclave. Source documents are purged as soon as the job is marked complete."
           />
           <div className="card">
             <EmptyState
@@ -163,7 +163,7 @@ export function UploadPage() {
       <div style={{ width: '100%', maxWidth: 680 }}>
         <PageHeader
           title="New de-identification job"
-          subtitle="Files are processed in an isolated enclave. Source documents are purged after export."
+          subtitle="Files are processed in an isolated enclave. Source documents are purged as soon as the job is marked complete."
         />
 
         {error && <ErrorBanner message={error} />}

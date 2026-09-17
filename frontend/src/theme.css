@@ -468,7 +468,9 @@ button.breadcrumb-item:hover {
   flex: none;
 }
 
-.status-badge-scanning {
+.status-badge-queued,
+.status-badge-scanning,
+.status-badge-finalizing {
   background: var(--color-warning-bg);
   color: var(--color-warning);
 }

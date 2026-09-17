@@ -30,6 +30,7 @@ replaces the page's text if it finds *more* content than native extraction
 did, so a genuinely short page never gets worse by attempting OCR.
 """
 import io
+import os
 import re
 import shutil
 import threading
@@ -42,7 +43,10 @@ _MIN_NATIVE_WORDS = 25  # below this, also try OCR and keep whichever is more co
 _LINE_TOLERANCE = 2.0  # points; words within this vertical difference are on the same line
 _PARAGRAPH_GAP_MULTIPLIER = 1.6  # a gap bigger than this multiple of the line height starts a new paragraph
 
-PAGE_IMAGE_RESOLUTION = 150  # DPI for both the stored page preview image and OCR rasterization
+PREVIEW_RESOLUTION = 150
+TESSERACT_RESOLUTION = 300
+
+MIN_TESSERACT_CONFIDENCE = 20.0
 
 # pdfplumber's page.to_image() rasterizes via pdfium (libpdfium), which is
 # not safe to call from multiple threads of the same process at once — it
@@ -224,20 +228,90 @@ def _ocr_words(image, resolution):
     from pytesseract import Output
 
     scale = 72.0 / resolution
-    data = pytesseract.image_to_data(image, output_type=Output.DICT)
+
+    data = pytesseract.image_to_data(image, output_type=Output.DICT, config="--oem 3 --psm 6")
     words = []
-    for i, text in enumerate(data["text"]):
-        if not text.strip():
+    for index, raw_text in enumerate(data["text"]):
+        text = (raw_text or "").strip()
+        if not text:
             continue
-        left, top, width, height = data["left"][i], data["top"][i], data["width"][i], data["height"][i]
+        try:
+            confidence = float(data["conf"][index])
+        except (TypeError, ValueError):
+            confidence = -1.0
+
+        if confidence < MIN_TESSERACT_CONFIDENCE:
+            continue
+
+        left = int(data["left"][index])
+        top = int(data["top"][index])
+        width = int(data["width"][index])
+        height = int(data["height"][index])
+
+        words.append(
+            {
+                "text": text,
+                "x0": left * scale,
+                "top": top * scale,
+                "x1": (left + width) * scale,
+                "bottom": (top + height) * scale,
+                "confidence": confidence / 100.0,
+            }
+        )
+    return words
+
+
+def _azure_ocr_words(image, page_width, page_height):
+    """Runs Azure AI Document Intelligence (FR-60) on `image` and returns a
+    word list shaped like pdfplumber's extract_words(), scaled from the
+    service's own page dimensions into this page's PDF points. Third- and
+    last-resort OCR tier, tried only when both the native text layer and
+    Tesseract come up short (e.g. a low-quality fax scan) and
+    REDACTION_ENABLE_AZURE_OCR is set. Requires
+    AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT; falls back to a managed identity
+    (FR-62) when no static key is configured."""
+    from azure.ai.documentintelligence import DocumentIntelligenceClient
+    from azure.core.credentials import AzureKeyCredential
+
+    endpoint = os.environ.get("AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT", "")
+    key = os.environ.get("AZURE_DOCUMENT_INTELLIGENCE_KEY", "")
+    if not endpoint:
+        raise ExtractionError("AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT is required when REDACTION_ENABLE_AZURE_OCR=True")
+    if key:
+        credential = AzureKeyCredential(key)
+    else:
+        from azure.identity import DefaultAzureCredential
+        credential = DefaultAzureCredential()
+    client = DocumentIntelligenceClient(endpoint=endpoint, credential=credential)
+
+    buf = io.BytesIO()
+    image.save(buf, format="PNG")
+    result = client.begin_analyze_document("prebuilt-read", body=buf.getvalue()).result()
+    if not result.pages:
+        return []
+
+    analyzed = result.pages[0]
+    x_scale = page_width / (analyzed.width or page_width)
+    y_scale = page_height / (analyzed.height or page_height)
+
+    words = []
+    for word in analyzed.words or []:
+        # polygon is a flat [x1, y1, x2, y2, ...] float list (clockwise
+        # vertices), not a list of Point objects.
+        polygon = word.polygon or []
+        xs = [x * x_scale for x in polygon[0::2]]
+        ys = [y * y_scale for y in polygon[1::2]]
+        if not xs or not ys:
+            continue
         words.append({
-            "text": text, "x0": left * scale, "top": top * scale,
-            "x1": (left + width) * scale, "bottom": (top + height) * scale,
+            "text": word.content,
+            "x0": min(xs), "top": min(ys), "x1": max(xs), "bottom": max(ys),
+            "confidence": float(word.confidence or 0.0),
         })
     return words
 
 
-def extract_blocks(file_obj):
+def extract_blocks(file_obj, *, force_ocr=False, azure_ocr_enabled=False):
     """
     Returns (page_count, blocks, pages) where:
     - blocks is a list of {index, page, type, text, source, words?, cells?}
@@ -268,24 +342,36 @@ def extract_blocks(file_obj):
                         w for w in page.extract_words()
                         if not any(_within_bbox(w["x0"], w["top"], w["x1"], w["bottom"], b) for b in table_bboxes)
                     ]
-                    rendered_image = page.to_image(resolution=PAGE_IMAGE_RESOLUTION).original
+                    preview_image = page.to_image(resolution=PREVIEW_RESOLUTION).original
                 except Exception as exc:  # pragma: no cover - pdfplumber internal failure
                     raise ExtractionError(f"Could not read page {page_number}: {exc}") from exc
 
                 native_words = len(words) + sum(len(cell_text.split()) for table in tables for row in table for cell_text, _, _ in row)
                 source = "text"
-                if native_words < _MIN_NATIVE_WORDS:
-                    # A handful of stray text runs (a couple of labels, a
-                    # border-line "table" pdfplumber mistook for real cells)
-                    # shouldn't count as "this page has usable text" — a
-                    # real page of prose has far more than a couple dozen
-                    # words. Only actually switch to OCR if it turns up more
-                    # content than what native extraction found, never less.
-                    ocr_words = _ocr_words(rendered_image, PAGE_IMAGE_RESOLUTION)
-                    if len(ocr_words) > native_words:
+                should_try_tesseract = force_ocr or native_words < _MIN_NATIVE_WORDS
+
+                if should_try_tesseract:
+                    ocr_image = page.to_image(
+                        resolution=TESSERACT_RESOLUTION
+                    ).original
+                    ocr_words = _ocr_words(
+                        ocr_image,
+                        TESSERACT_RESOLUTION,
+                    )
+                    if force_ocr or len(ocr_words) > native_words:
                         words = ocr_words
                         tables = []
-                        source = "ocr"
+                        source = "tesseract"
+
+                    # Tesseract still came up short (or isn't installed) —
+                    # try Azure Document Intelligence as a last resort
+                    # before accepting a possibly-blank page.
+                    if azure_ocr_enabled and len(words) < _MIN_NATIVE_WORDS:
+                        azure_words = _azure_ocr_words(ocr_image, page.width, page.height)
+                        if len(azure_words) > len(words):
+                            words = azure_words
+                            tables = []
+                            source = "azure_ocr"
 
                 lines = _group_words_into_lines(sorted(words, key=lambda w: (round(w["top"]), w["x0"])))
                 page_blocks, index = _group_lines_into_blocks(lines, page_number, index, source)
@@ -297,7 +383,7 @@ def extract_blocks(file_obj):
                         index += 1
 
                 png_buf = io.BytesIO()
-                rendered_image.save(png_buf, format="PNG")
+                preview_image.save(png_buf, format="PNG")
                 pages.append({
                     "number": page_number, "width": page.width, "height": page.height,
                     "png": png_buf.getvalue(),
@@ -311,9 +397,19 @@ def extract_blocks(file_obj):
         raise ExtractionError(f"Could not parse this PDF: {message}") from exc
 
     if not blocks:
-        hint = "" if _TESSERACT_AVAILABLE else " Tesseract OCR isn't installed on this server, so image-only pages couldn't be read either — install it and retry."
-        raise ExtractionError(
-            "No extractable text was found. The PDF may be a scanned image "
-            f"with no text layer.{hint}"
-        )
+        if not blocks:
+            if not _TESSERACT_AVAILABLE:
+                hint = (
+                    " Tesseract OCR is not installed, so image-only pages "
+                    "could not be processed."
+                )
+            else:
+                hint = (
+                    " Tesseract was available, but it did not find usable text."
+                )
+
+            raise ExtractionError(
+                "No extractable text was found. The PDF may be blank or "
+                f"contain an unreadable scanned image.{hint}"
+            )
     return page_count, blocks, pages

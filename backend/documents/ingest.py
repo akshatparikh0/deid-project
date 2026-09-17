@@ -1,27 +1,32 @@
 """
-Orchestrates turning an uploaded PDF into a fully-populated Job: extract
-text blocks, run PHI detection over each block, persist DocumentBlock and
-Entity rows (each entity carrying page-coordinate bounding boxes so the
-Review screen can draw redaction/highlight boxes on the real rendered page
-image), one Page row per page image, and seed one CategoryRule per
-canonical Safe Harbor category.
+Orchestrates turning an uploaded PDF into a fully-populated Job: validate,
+extract text blocks, run PHI detection (the regex engine, plus Azure AI
+Language and/or Claude when enabled) over each block, persist
+DocumentBlock and Entity rows (each entity carrying page-coordinate
+bounding boxes so the Review screen can draw redaction/highlight boxes on
+the real rendered page image), one Page row per page image, and seed one
+CategoryRule per canonical Safe Harbor category.
 
-Runs on a background thread (see tasks.py), advancing job.status through the
-parse/detect/transform/finalize stages (categories.STAGE_ORDER) and recording
-each one's start/finish on a JobStage row so the Status page can poll live
-per-stage progress and timing for many jobs at once.
+Runs on a background thread or a Celery task (see tasks.py), advancing
+job.status through the parse/detect/transform/finalize stages
+(categories.STAGE_ORDER) and recording each one's start/finish on a
+JobStage row so the Status page can poll live per-stage progress and
+timing for many jobs at once.
 """
 import logging
 
+from django.conf import settings
 from django.core.files.base import ContentFile
 from django.db import transaction
 from django.utils import timezone
 
+from .ai_detection import DetectorConfigError, build_detectors
 from .categories import CATEGORY_META, CATEGORY_ORDER, STAGE_ORDER
-from .detection import detect_spans
+from .detection import detect_spans, merge_spans
 from .extraction import ExtractionError, extract_blocks
 from .models import CategoryRule, DocumentBlock, Entity, JobStage, Page
 from .surrogates import make_surrogate
+from .validation import ValidationError, validate_pdf
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +93,18 @@ def _fail_job(job, message, pages=None):
     job.save(update_fields=fields)
 
 
-def _spans_for_block(raw):
+def _detect_all(text, ai_detectors, column_header=None):
+    """Runs the regex engine plus every enabled AI detector (Azure AI
+    Language, Claude — see ai_detection.py) over one block/cell of text and
+    resolves overlaps across all of them together, so a higher-confidence
+    match from either kind of engine always wins (FR-20)."""
+    span_lists = [detect_spans(text, column_header=column_header)]
+    for detector in ai_detectors:
+        span_lists.append(detector.detect(text))
+    return merge_spans(*span_lists) if ai_detectors else span_lists[0]
+
+
+def _spans_for_block(raw, ai_detectors):
     """Runs PHI detection over one extracted block, returning
     [(span, boxes), ...] — boxes already mapped onto the block's page-
     coordinate geometry so entities can be persisted directly from this."""
@@ -97,12 +113,12 @@ def _spans_for_block(raw):
         for cell in raw["cells"]:
             cell_text = raw["text"][cell["start"]:cell["end"]]
             cell_box = [{"x0": cell["x0"], "top": cell["top"], "x1": cell["x1"], "bottom": cell["bottom"]}]
-            for span in detect_spans(cell_text, column_header=cell["header"]):
+            for span in _detect_all(cell_text, ai_detectors, column_header=cell["header"]):
                 adjusted = {**span, "start": span["start"] + cell["start"], "end": span["end"] + cell["start"]}
                 spans_with_boxes.append((adjusted, cell_box))
     else:
         words = raw.get("words", [])
-        for span in detect_spans(raw["text"]):
+        for span in _detect_all(raw["text"], ai_detectors):
             spans_with_boxes.append((span, _line_group_boxes(words, span["start"], span["end"])))
     return spans_with_boxes
 
@@ -111,14 +127,27 @@ def run_ingestion(job, file_obj):
     """Populate `job` (already saved, status='scanning') from `file_obj`,
     advancing it through parse -> detect -> transform -> finalize. On
     success, blocks/entities/rules/pages are created and job.status becomes
-    'in_review' with rules already applied (see the 'finalize' stage below).
-    On failure, job.status becomes 'failed' with error_message set, and the
-    stage that failed is recorded. Either way the job is saved before
-    returning."""
+    'in_review' with enabled rules already applied (see the 'finalize'
+    stage below). On failure, job.status becomes 'failed' with
+    error_message set, and the stage that failed is recorded. Either way
+    the job is saved before returning."""
     parse_stage = _start_stage(job, "parse")
     try:
-        page_count, raw_blocks, raw_pages = extract_blocks(file_obj)
-    except ExtractionError as exc:
+        ai_detectors = build_detectors(settings)
+
+        validate_pdf(
+            file_obj,
+            filename=getattr(file_obj, "name", job.filename),
+        )
+
+        file_obj.seek(0)
+
+        page_count, raw_blocks, raw_pages = extract_blocks(
+            file_obj,
+            force_ocr=settings.REDACTION_FORCE_OCR,
+            azure_ocr_enabled=settings.REDACTION_ENABLE_AZURE_OCR,
+        )
+    except (ValidationError, ExtractionError, DetectorConfigError) as exc:
         _fail_stage(parse_stage, str(exc))
         _fail_job(job, str(exc), pages=0)
         return job
@@ -135,7 +164,7 @@ def run_ingestion(job, file_obj):
         # [(raw_block, [(span, boxes), ...]), ...] — kept in memory; nothing
         # is persisted until 'finalize' so a mid-stage failure leaves no
         # partial rows behind.
-        detected = [(raw, _spans_for_block(raw)) for raw in raw_blocks]
+        detected = [(raw, _spans_for_block(raw, ai_detectors)) for raw in raw_blocks]
     except Exception:
         logger.exception("Unexpected error detecting PHI for job %s", job.id)
         message = "An unexpected error occurred while detecting identifiers."
@@ -184,11 +213,20 @@ def run_ingestion(job, file_obj):
                     entity_seq += 1
                     value = raw["text"][span["start"]:span["end"]]
                     cache_key = (span["category"], value.lower())
+                    # FR-21: apply detection.min_confidence via the job's
+                    # confidence_threshold — a span below it still becomes a
+                    # reviewable Entity (never silently dropped), it just
+                    # defaults to "keep" instead of the job's preset mode, so
+                    # a low-confidence guess doesn't change the document
+                    # until a reviewer confirms it (AC-13). The auto-apply
+                    # step below (for jobs with no manual review checkpoint)
+                    # is scoped to respect this same floor.
+                    default_mode = job.preset if span["confidence"] >= job.confidence_threshold else "keep"
                     Entity.objects.create(
                         job=job, block=block, code=f"E-{entity_seq:02d}",
                         category=span["category"], value=value,
                         surrogate_value=surrogate_cache[cache_key],
-                        mode=job.preset, confidence=span["confidence"],
+                        mode=default_mode, confidence=span["confidence"],
                         page=raw["page"], detector=span["detector"],
                         start_in_block=span["start"], end_in_block=span["end"],
                         boxes=boxes,
@@ -208,11 +246,16 @@ def run_ingestion(job, file_obj):
             ])
 
             # Equivalent to the old client-triggered POST /rules/apply/ step
-            # (JobRulesApplyView), folded into the pipeline itself: a batch of
-            # jobs has no per-job human checkpoint between scan and review, so
-            # a job reaching 'in_review' must already be fully review-ready.
+            # (JobRulesApplyView), folded into the pipeline itself: a batch
+            # of jobs has no per-job human checkpoint between scan and
+            # review, so a job reaching 'in_review' must already be fully
+            # review-ready. Scoped to confidence_threshold and above so this
+            # can't undo the FR-21 "keep" floor a low-confidence entity just
+            # got above — those still need an explicit reviewer decision.
             for rule in job.rules.filter(enabled=True):
-                job.entities.filter(category=rule.category).update(mode=rule.mode)
+                job.entities.filter(
+                    category=rule.category, confidence__gte=job.confidence_threshold,
+                ).update(mode=rule.mode)
     except Exception:
         logger.exception("Unexpected error finalizing job %s", job.id)
         message = "An unexpected error occurred while saving results."

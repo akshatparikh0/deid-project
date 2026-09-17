@@ -1,0 +1,99 @@
+# Local/staging parity stack: Postgres + Redis + the Django API + a Celery
+# worker + the built frontend behind nginx. `./dev.sh` (no Docker, no extra
+# services, SQLite + synchronous in-process ingestion) is still the fastest
+# inner-loop for day-to-day backend/frontend work — reach for this compose
+# file when you specifically need to exercise the async/Postgres/multi-
+# service path before it ships to staging.
+#
+# Quick start:
+#   cp backend/.env.example backend/.env   # fill in DJANGO_SECRET_KEY at minimum
+#   docker compose up --build
+# API: http://localhost:8000/api/   Frontend: http://localhost:5173/
+name: deid
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: deid
+      POSTGRES_USER: deid
+      POSTGRES_PASSWORD: deid
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U deid"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build: ./backend
+    command: python manage.py migrate --noinput
+    env_file: [backend/.env]
+    environment:
+      DATABASE_URL: postgres://deid:deid@postgres:5432/deid
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - media:/app/media
+
+  api:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    env_file: [backend/.env]
+    environment:
+      DATABASE_URL: postgres://deid:deid@postgres:5432/deid
+      CELERY_BROKER_URL: redis://redis:6379/0
+      DJANGO_CORS_ALLOWED_ORIGINS: http://localhost:5173
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - media:/app/media
+
+  worker:
+    build: ./backend
+    command: celery -A deid_backend worker --loglevel=INFO -Q deid-ingest --concurrency=4
+    env_file: [backend/.env]
+    environment:
+      DATABASE_URL: postgres://deid:deid@postgres:5432/deid
+      CELERY_BROKER_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - media:/app/media
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: http://localhost:8000/api
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+
+volumes:
+  postgres-data:
+  media:

@@ -23,7 +23,7 @@ import { routeForJobStatus } from '../lib/jobRoute';
 import { showToast } from '../lib/toast';
 
 function routeForJob(job: Job): string | null {
-  return routeForJobStatus(job.id, job.status, job.batch);
+  return routeForJobStatus(job.id, job.status, job.batch, job.entity_count);
 }
 
 /** By convention the top level holds projects and the next level holds
@@ -148,8 +148,8 @@ export function QueuePage() {
         title={trail.length ? trail[trail.length - 1].name : 'Document library'}
         subtitle={
           trail.length
-            ? 'Sources are purged 24 hours after completion; audit records are retained six years.'
-            : 'Every project, organized by patient, with its documents and audit record. Sources are purged 24 hours after completion; audit records are retained six years.'
+            ? 'Sources are purged immediately on completion; audit records are retained six years.'
+            : 'Every project, organized by patient, with its documents and audit record. Sources are purged immediately on completion; audit records are retained six years.'
         }
         actions={
           <>

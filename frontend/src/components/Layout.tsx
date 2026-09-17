@@ -32,7 +32,9 @@ export function Layout() {
   const rulesPath = activeFolder ? `/folders/${activeFolder.id}/rules` : null;
   const uploadPath =
     activeFolder && uploadReadyFolderId === activeFolder.id ? `/upload?folder=${activeFolder.id}` : null;
-  const reviewPath = activeJob ? routeForJobStatus(activeJob.id, activeJob.status) : null;
+  const reviewPath = activeJob
+    ? routeForJobStatus(activeJob.id, activeJob.status, undefined, activeJob.entityCount)
+    : null;
   const statusPath = activeBatchId != null ? `/uploads/${activeBatchId}/status` : null;
 
   const items = [

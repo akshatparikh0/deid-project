@@ -8,52 +8,74 @@ CORS is open for `http://localhost:5173` (Vite dev server).
 
 ```ts
 type Category =
-  | 'patient_name' | 'physician_name' | 'name' | 'facility' | 'geo' | 'date'
-  | 'phone' | 'fax' | 'email' | 'ssn' | 'mrn' | 'plan' | 'account'
-  | 'license' | 'vehicle' | 'device' | 'url' | 'ip' | 'biometric' | 'photo'
-  | 'other';
+  | 'patient_name' | 'physician_name' | 'person_name' | 'guarantor_name'
+  | 'facility_name' | 'employer' | 'date_of_birth' | 'date_of_service'
+  | 'other_date' | 'age_over_89' | 'age_89_or_below' | 'street_address'
+  | 'zip_code' | 'phone' | 'fax' | 'email' | 'url' | 'ssn' | 'mrn'
+  | 'member_id' | 'account' | 'payment_card' | 'ip_address' | 'device_id'
+  | 'license' | 'vehicle' | 'biometric' | 'photo' | 'other';
 
 type Mode = 'redact' | 'mask' | 'pseudo' | 'keep';
 
-type JobStatus = 'scanning' | 'in_review' | 'complete' | 'failed';
+// "queued": uploaded, not yet picked up by a worker (async processing —
+// the backend runs this synchronously in-process when no Celery broker is
+// configured, so this state is normally instantaneous in dev).
+// "finalizing": completion requested — running true-PDF-redaction plus
+// second-pass verification; also normally instantaneous, but a real,
+// pollable state.
+type JobStatus = 'queued' | 'scanning' | 'in_review' | 'finalizing' | 'complete' | 'failed';
 ```
 
-`name` now means "other person name" (family members and anyone else who
-isn't the patient or a physician/provider) — `patient_name` and
-`physician_name` are split out as their own categories even though Safe
-Harbor's "Names" identifier covers all three the same way; the split is
-purely for reviewer clarity. `facility` (organization/institution name)
-isn't one of the 18 numbered Safe Harbor identifiers either, but is tracked
-the same way since it's routinely identifying alongside geographic
-subdivisions. Credit card numbers are detected but tagged under the
-existing `other` category rather than a dedicated one.
+This is the unified entity taxonomy shared by the Django app and the
+project configuration schema (`config/default_policy.json`) —
+`patient_name` / `physician_name` /
+`guarantor_name` / `person_name` are split out as their own categories even
+though Safe Harbor's "Names" identifier covers all four the same way; the
+split is purely for reviewer clarity, and `guarantor_name` also matches its
+own named requirement (guarantor/next-of-kin). `facility_name` and
+`employer` aren't themselves numbered Safe Harbor identifiers, but are
+tracked the same way since they're routinely identifying. Dates are split
+into `date_of_birth` / `date_of_service` / `other_date` so the per-category
+policy can leave the date of service unchanged (it orders a patient's
+record) while masking every other date — Safe Harbor's date identifier
+covers all of them the same way. `payment_card` is its own category (no
+longer folded into `other`).
 
-Category metadata (label + accent color hex) the frontend should hardcode, keyed by the
-`category` string returned by the API — the backend does NOT send label/color inline on
-every entity, only on the `/rules/` endpoint (see below):
+Category metadata (label + accent color hex) the frontend hardcodes (see
+`frontend/src/lib/categories.ts`), keyed by the `category` string returned
+by the API — the backend does NOT send label/color inline on every entity,
+only on the `/rules/` endpoint (see below):
 
 ```
-patient_name      Patient name              #6A3FA0
-physician_name    Physician / provider name #9B6FD1
-name              Other person name         #7C4DBC
-facility          Facility / organization   #3A7CA5
-geo               Geographic                #2D6FB8
-date              Date                      #B8792D
-phone             Telephone                 #1F8A70
-fax               Fax                       #1F8A70
-email             Email                     #1F8A70
-ssn               SSN                       #A4291F
-mrn               Medical record no.        #A4291F
-plan              Health plan no.           #A4291F
-account           Account no.               #8A5A1B
-license           Certificate / licence     #8A5A1B
-vehicle           Vehicle identifier        #5B6770
-device            Device identifier         #5B6770
-url               URL                       #2D6FB8
-ip                IP address                #2D6FB8
-biometric         Biometric                 #7C4DBC
-photo             Full-face image           #7C4DBC
-other             Other identifier          #5B6770
+patient_name      Patient name                #6A3FA0
+physician_name    Physician / provider name   #9B6FD1
+person_name       Other person name           #7C4DBC
+guarantor_name    Guarantor / next of kin     #7C4DBC
+facility_name     Facility / organization     #3A7CA5
+employer          Employer                    #3A7CA5
+date_of_birth     Date of birth               #B8792D
+date_of_service   Date of service             #B8792D
+other_date        Other date                  #B8792D
+age_over_89       Age above 89                #B8792D
+age_89_or_below   Age 89 or below             #B8792D
+street_address    Street address              #2D6FB8
+zip_code          ZIP code                    #2D6FB8
+phone             Telephone                   #1F8A70
+fax               Fax                         #1F8A70
+email             Email                       #1F8A70
+url               URL                         #2D6FB8
+ssn               SSN / government ID         #A4291F
+mrn               Medical record number       #A4291F
+member_id         Member ID                   #A4291F
+account           Account number              #8A5A1B
+payment_card      Payment card / bank ID      #A4291F
+ip_address        IP address                  #2D6FB8
+device_id         Device identifier           #5B6770
+license           Certificate / licence       #8A5A1B
+vehicle           Vehicle identifier          #5B6770
+biometric         Biometric identifier        #7C4DBC
+photo             Full-face image             #7C4DBC
+other             Other identifier            #5B6770
 ```
 
 Mode labels: redact="Redact", mask="Mask", pseudo="Pseudonymize", keep="Keep".
@@ -87,7 +109,7 @@ interface Entity {
   mode: Mode;
   confidence: number;    // 0..1
   page: number;          // 1-indexed
-  detector: string;      // "pattern" | "heuristic" | "context"
+  detector: string;      // "pattern" | "heuristic" | "context" | "azure_ai_language" | "anthropic"
   block_index: number;   // index into DocumentPayload.blocks
 }
 
@@ -99,9 +121,11 @@ interface DocumentBlock {
   index: number;
   page: number;
   type: 'title' | 'sub' | 'h' | 'p' | 'table_row';
-  source: 'text' | 'ocr';  // 'ocr' means this block came from the Tesseract
-                            // fallback for a page with no native text layer —
-                            // treat its entities as lower-reliability
+  // OCR fallback tiers for a page with no usable native text layer, tried
+  // in this order: 'tesseract' first, then 'azure_ocr' (Azure AI Document
+  // Intelligence) as a last resort when enabled and Tesseract still comes
+  // up short. Treat either as lower-reliability than 'text'.
+  source: 'text' | 'tesseract' | 'azure_ocr';
   parts: BlockPart[];
 }
 
@@ -142,13 +166,24 @@ multipart/form-data: `file` (PDF, required), `uploaded_by` (string, optional),
 `department` (string, optional), `preset` (Mode, optional, default `"mask"` — used as the
 initial default mode for every detected category's rule).
 
-Synchronously: saves the upload, extracts text per page, runs PHI detection, creates
-Entity rows (all starting at `mode = preset`) and CategoryRule rows (`enabled=true`,
-`mode=preset`, `token` = default token for that category), sets `status="in_review"`.
-If the PDF can't be parsed (encrypted, no extractable text, corrupt), creates the Job
-with `status="failed"` and a human-readable `error_message`, still returns 201.
+Saves the upload with `status="queued"` and dispatches ingestion (extract text per page,
+run PHI detection — the regex/heuristic engine, plus Azure AI Language and/or Claude when
+enabled — create Entity rows and CategoryRule rows) as a Celery task. With no
+`CELERY_BROKER_URL` configured (the default for local dev), the task runs synchronously
+in-process before the response is returned, so `status` is already `"in_review"` (or
+`"failed"`) by the time the client sees it — a deployment with a real broker returns
+`"queued"` immediately instead, and the client should poll `GET /api/jobs/:id/` until the
+status leaves `"queued"`/`"scanning"`.
 
-Returns `201 { job: Job }`.
+Each detected entity's default `mode` is `preset` if its confidence is at or above the
+job's `confidence_threshold` (0.85 by default), otherwise `"keep"` — a low-confidence
+guess is always visible for review, but never changes the document until a reviewer
+confirms it.
+
+If the PDF can't be parsed (encrypted, no extractable text, corrupt) or an enabled AI
+detector is misconfigured, the Job ends up with `status="failed"` and a human-readable
+`error_message`. Returns `201 { job: Job }` in every case (the failure is reported on the
+Job, not as a non-2xx response).
 
 ### `GET /api/jobs/`
 Returns `200 { jobs: Job[] }`, newest first.
@@ -180,19 +215,39 @@ Returns `200 { job: Job, entities: Entity[] }`.
 
 ### `POST /api/jobs/:id/complete/`
 Body: `{ force?: boolean }`. If any entity has `mode === 'keep'` and `force` is not
-`true`, returns `409 { detail, unresolved_count }`. Otherwise sets `status="complete"`
-and returns `200 { job: Job }`.
+`true`, returns `409 { detail, unresolved_count }`.
+
+Otherwise: sets `status="finalizing"`, then true-redacts the *original* PDF's content
+stream via PyMuPDF (burning in every non-`"keep"` entity's approved mode — not the
+reportlab reconstruction the export endpoint below uses), then re-runs detection on the
+finalized document as a second-pass verification. If anything that should have been
+removed is still detectable there, the job is left recoverable: `status` becomes
+`"failed"` with an `error_message` describing the count (never the actual values), the
+source file is **not** purged, and no audit trail is written — reopen the job, adjust
+entities, and complete again. Returns `422 { detail, job: Job }` in that case.
+
+On success: writes one permanent `AuditRecord` row per entity (see `GET .../audit/`
+below), stores the finalized PDF as the canonical `"pdf"` export artifact, sets
+`status="complete"`, purges the source file, and returns `200 { job: Job }`.
 
 ### `POST /api/jobs/:id/reopen/`
 Sets `status="in_review"`. Returns `200 { job: Job }`.
 
 ### `GET /api/jobs/:id/audit/`
-Returns `200 { rows: AuditRow[] }`, one per entity, ordered by entity `code`.
+Returns `200 { rows: AuditRow[] }`, ordered by entity `code`. Before completion, these
+rows are a live preview derived from the (still-editable) Entity table. After completion,
+they're read from the permanent `AuditRecord` table instead — written once at
+finalization and append-only from then on (an update or delete attempt raises at the
+model layer; nothing in the API can trigger one).
 
 ### `POST /api/jobs/:id/export/`
 Body: `{ formats: Array<'pdf'|'csv'|'json'> }`. Generates the requested artifacts server
-side (a reconstructed de-identified PDF via reportlab, the audit CSV, an entity-manifest
-JSON) and returns `200 { files: ExportFile[] }`.
+side and returns `200 { files: ExportFile[] }`. The `"csv"` (audit trail) and `"json"`
+(entity manifest) formats are hash-only reconstructions from the block/entity model, same
+as before. The `"pdf"` format is the true-redacted document from `/complete/` when the job
+is already complete (or already finalized once); requesting it before completion falls
+back to a reportlab reconstruction from the same block/entity model the Review screen
+renders, since the original file's content stream isn't touched until completion.
 
 ### `GET /api/jobs/:id/export/download/:format/`
 Streams the generated file (`application/pdf`, `text/csv`, or `application/json`) with a

@@ -5,9 +5,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .categories import CATEGORY_META, CATEGORY_ORDER
+from .complete import VerificationError, complete_job
 from .export import build_export, content_type_for
-from .ingest import run_ingestion
 from .models import CategoryRule, Entity, ExportArtifact, Folder, FolderCategoryRule, Job, Page, UploadBatch
+from .tasks import ingest_job
 from .payload import build_document_payload
 from .serializers import (
     BatchUploadSerializer,
@@ -173,12 +174,15 @@ class JobListCreateView(APIView):
             department=data.get("department", ""),
             folder=data.get("folder"),
             preset=data.get("preset", "mask"),
-            status="scanning",
+            status="queued",
         )
         job.file.save(data["file"].name, data["file"], save=True)
 
-        with job.file.open("rb") as fh:
-            run_ingestion(job, fh)
+        # Synchronous in-process (default, no broker configured) or a real
+        # queued worker job (CELERY_BROKER_URL set) — see tasks.py. Either
+        # way the job is "queued" until a worker picks it up, matching
+        # Job.status's original intent for this state.
+        ingest_job.delay(job.id)
 
         job.refresh_from_db()
         return Response({"job": JobSerializer(job).data}, status=201)
@@ -276,7 +280,13 @@ class JobDetailView(APIView):
 class JobDocumentView(APIView):
     def get(self, request, job_id):
         job = _job_or_404(job_id)
-        if job.status == "failed":
+        # "failed" covers two different things: ingestion never produced a
+        # document at all (nothing to show), or completion's verification
+        # step rejected an otherwise-fully-reviewed document (blocks and
+        # entities exist, and the reviewer needs to see them to fix
+        # whatever survived) — checking for blocks distinguishes the two
+        # instead of blocking every "failed" job equally.
+        if not job.blocks.exists():
             return Response({"detail": "This job failed to scan and has no document to review."}, status=409)
         return Response(build_document_payload(job))
 
@@ -380,6 +390,21 @@ class JobCompleteView(APIView):
                 status=409,
             )
 
+        job.status = "finalizing"
+        job.save(update_fields=["status"])
+
+        try:
+            complete_job(job)
+        except VerificationError as exc:
+            # The source file and every DB row up to this point are
+            # untouched — the job goes to "failed" rather than "complete"
+            # so a partially- or unverifiably-redacted document is never
+            # delivered (FR-81, AC-25).
+            job.status = "failed"
+            job.error_message = str(exc)
+            job.save(update_fields=["status", "error_message"])
+            return Response({"detail": str(exc), "job": JobSerializer(job).data}, status=422)
+
         job.status = "complete"
         job.save(update_fields=["status"])
         job.purge_source_file()
@@ -397,14 +422,31 @@ class JobReopenView(APIView):
 class JobAuditView(APIView):
     def get(self, request, job_id):
         job = _job_or_404(job_id)
-        rows = [
-            {
-                "entity_code": e.code, "category": e.category, "value_hash": e.value_hash(),
-                "action": e.mode, "detector": e.detector, "confidence": round(e.confidence, 2),
-                "created_at": job.updated_at.isoformat(),
-            }
-            for e in job.entities.order_by("code")
-        ]
+        audit_records = list(job.audit_records.all())
+        if audit_records:
+            # The permanent, immutable trail written once at finalization
+            # (NFR-16) — what actually shipped, not the still-editable
+            # in-review state.
+            rows = [
+                {
+                    "entity_code": r.entity_code, "category": r.category, "value_hash": r.value_hash,
+                    "action": r.action, "detector": r.detector, "confidence": round(r.confidence, 2),
+                    "created_at": r.created_at.isoformat(),
+                }
+                for r in audit_records
+            ]
+        else:
+            # Not finalized yet — a live preview derived from the
+            # currently-editable Entity table, so a reviewer can see what
+            # the audit trail *will* look like before completing the job.
+            rows = [
+                {
+                    "entity_code": e.code, "category": e.category, "value_hash": e.value_hash(),
+                    "action": e.mode, "detector": e.detector, "confidence": round(e.confidence, 2),
+                    "created_at": job.updated_at.isoformat(),
+                }
+                for e in job.entities.order_by("code")
+            ]
         return Response({"rows": rows})
 
 
@@ -418,7 +460,17 @@ class JobExportView(APIView):
         entities = list(job.entities.order_by("code"))
         files = []
         for fmt in serializer.validated_data["formats"]:
-            artifact = build_export(job, fmt, payload["blocks"], entities)
+            # complete_job() (see complete.py) already wrote the true
+            # PyMuPDF-redacted "pdf" artifact at finalization — regenerating
+            # it here via the reportlab reconstruction would silently
+            # replace a verified, byte-faithful result with a lower-fidelity
+            # one, and the source file it would need is purged by then
+            # anyway. Only build it on demand for a job that hasn't been
+            # finalized yet.
+            if fmt == "pdf" and job.status == "complete":
+                artifact = ExportArtifact.objects.get(job=job, format="pdf")
+            else:
+                artifact = build_export(job, fmt, payload["blocks"], entities)
             files.append({
                 "format": fmt, "filename": artifact.filename,
                 "url": f"/api/jobs/{job.id}/export/download/{fmt}/",

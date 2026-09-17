@@ -126,7 +126,7 @@ export function ReviewPage() {
       setJob(updated);
       setActiveJob(updated);
       setConfirmingComplete(null);
-      showToast(`${updated.code} marked complete. Source document scheduled for purge in 24 h.`);
+      showToast(`${updated.code} marked complete. Finalized, verified, and the source document has been purged.`);
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         const count = (err.body?.unresolved_count as number | undefined) ?? unresolvedCount;
