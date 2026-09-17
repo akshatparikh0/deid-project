@@ -164,7 +164,13 @@ _OTHER_KEYWORDS = re.compile(
 )
 
 _GENERIC_NAME = re.compile(
-    r"\b([A-Z][a-z]+(?:\s[A-Z]\.)?\s[A-Z][a-z]+(?:\s(?:MD|RN|DO|NP|PA)\b)?)\b"
+    # The middle-initial group's trailing period is optional — a middle
+    # initial dropped its period entirely ("Nancie J Wintz") in a source
+    # document that also runs several unrelated text fragments together
+    # into one garbled block; period-less real text this could
+    # over-trigger on (e.g. a stray single-letter list marker) is rarer
+    # than missing the initial in scanned/reflowed medical records.
+    r"\b([A-Z][a-z]+(?:\s[A-Z]\.?)?\s[A-Z][a-z]+(?:\s(?:MD|RN|DO|NP|PA)\b)?)\b"
 )
 _COMMA_NAME = re.compile(r"\b([A-Z][A-Za-z'\-]+),\s+([A-Z][A-Za-z'\-]+(?:\s[A-Z]\.?)?)\b")
 

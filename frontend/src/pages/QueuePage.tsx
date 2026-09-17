@@ -13,10 +13,18 @@ function routeForJob(job: Job): string | null {
     case 'complete':
       return `/jobs/${job.id}/audit`;
     case 'failed':
-      return null;
+      // "failed" covers two different things: ingestion never produced a
+      // document at all (nothing to show — entity_count is 0), or a
+      // completion-time verification failure, where the document and
+      // every entity are still there and the reviewer needs to get back
+      // in to fix whatever survived (see documents/views.py's
+      // JobDocumentView, which allows exactly this case now).
+      return job.entity_count > 0 ? `/jobs/${job.id}/review` : null;
     case 'scanning':
+    case 'queued':
       return `/jobs/${job.id}/rules`;
     case 'in_review':
+    case 'finalizing':
     default:
       return `/jobs/${job.id}/review`;
   }
