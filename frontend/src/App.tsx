@@ -11,6 +11,7 @@ import { QueuePage } from './pages/QueuePage';
 import { RegisterPage } from './pages/RegisterPage';
 import { ReviewPage } from './pages/ReviewPage';
 import { RulesPage } from './pages/RulesPage';
+import { StatusPage } from './pages/StatusPage';
 import { UploadPage } from './pages/UploadPage';
 
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -50,6 +51,7 @@ function App() {
         <Route path="/queue" element={<QueuePage />} />
         <Route path="/folders/:id/rules" element={<ConfigRulesPage />} />
         <Route path="/upload" element={<UploadPage />} />
+        <Route path="/uploads/:batchId/status" element={<StatusPage />} />
         <Route path="/jobs/:id/rules" element={<RulesPage />} />
         <Route path="/jobs/:id/review" element={<ReviewPage />} />
         <Route path="/jobs/:id/audit" element={<AuditPage />} />

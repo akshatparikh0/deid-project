@@ -20,6 +20,10 @@ let queueCount: number | null = null;
  * continue — gates the "Upload file" sidebar link so it can't be reached by
  * any route other than document library -> config rules -> continue. */
 let uploadReadyFolderId: number | null = null;
+/** The most recently created/opened UploadBatch — gates the "Status" sidebar
+ * link the same way uploadReadyFolderId gates "Upload file". Set once a
+ * batch is created (UploadPage) or its Status page is opened (StatusPage). */
+let activeBatchId: number | null = null;
 const listeners = new Set<() => void>();
 
 function emit() {
@@ -39,6 +43,7 @@ export function setActiveJob(job: Job | null) {
 export function setActiveFolder(folder: Folder | null) {
   activeFolder = folder ? { id: folder.id, name: folder.name } : null;
   uploadReadyFolderId = null;
+  activeBatchId = null;
   emit();
 }
 
@@ -49,6 +54,15 @@ export function setUploadReady(folderId: number) {
 
 export function getUploadReadySnapshot() {
   return uploadReadyFolderId;
+}
+
+export function setActiveBatch(batchId: number | null) {
+  activeBatchId = batchId;
+  emit();
+}
+
+export function getActiveBatchSnapshot() {
+  return activeBatchId;
 }
 
 export function setQueueCount(count: number) {

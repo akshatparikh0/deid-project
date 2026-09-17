@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import type { DragEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ApiError, applyRules, createJob, listFolders } from '../api/client';
+import { ApiError, createUploadBatch, listFolders } from '../api/client';
 import type { Mode } from '../api/types';
 import { PageHeader } from '../components/Layout';
 import { EmptyState, ErrorBanner, LoadingState } from '../components/States';
+import { setActiveBatch } from '../lib/activeJob';
 import { isPatientFolder } from '../lib/folders';
 import { showToast } from '../lib/toast';
 
@@ -40,12 +41,18 @@ const PRESETS: {
 
 const DEFAULT_PRESET: Mode = 'mask';
 
+function isPdf(f: File): boolean {
+  return f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf');
+}
+
 export function UploadPage() {
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [skipped, setSkipped] = useState<string[]>([]);
   const [dragging, setDragging] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const folderParam = searchParams.get('folder');
@@ -63,41 +70,60 @@ export function UploadPage() {
       .catch(() => setFolderValid(false));
   }, [folder]);
 
-  function pickFile(f: File | undefined | null) {
-    if (!f) return;
-    if (f.type !== 'application/pdf' && !f.name.toLowerCase().endsWith('.pdf')) {
-      setError('Only PDF files are supported.');
-      return;
-    }
-    setError(null);
-    setFile(f);
+  // Browsers only expose folder-select via this non-standard attribute, and
+  // React has no typed JSX prop for it — it has to be set on the DOM node.
+  useEffect(() => {
+    folderInputRef.current?.setAttribute('webkitdirectory', '');
+  }, []);
+
+  function pickFiles(list: FileList | File[] | null | undefined) {
+    if (!list) return;
+    const incoming = Array.from(list);
+    const validOnes = incoming.filter(isPdf);
+    const skippedNames = incoming.filter((f) => !isPdf(f)).map((f) => f.name);
+
+    setFiles((prev) => {
+      const seen = new Set(prev.map((f) => `${f.name}:${f.size}`));
+      const merged = [...prev];
+      for (const f of validOnes) {
+        const key = `${f.name}:${f.size}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          merged.push(f);
+        }
+      }
+      return merged;
+    });
+    setSkipped(skippedNames);
+    if (validOnes.length > 0) setError(null);
+  }
+
+  function removeFile(index: number) {
+    setFiles((prev) => prev.filter((_, i) => i !== index));
   }
 
   function onDrop(e: DragEvent<HTMLDivElement>) {
     e.preventDefault();
     setDragging(false);
-    pickFile(e.dataTransfer.files?.[0]);
+    pickFiles(e.dataTransfer.files);
   }
 
   async function onSubmit() {
-    if (!file) {
-      setError('Choose a PDF to scan first.');
+    if (files.length === 0) {
+      setError('Choose at least one PDF to scan first.');
       return;
     }
     setSubmitting(true);
     setError(null);
     try {
-      const { job } = await createJob({ file, preset: DEFAULT_PRESET, folder });
-      if (job.status === 'failed') {
-        setError(job.error_message || 'This PDF could not be processed.');
-        setSubmitting(false);
-        return;
+      const { batch, rejected } = await createUploadBatch({ files, preset: DEFAULT_PRESET, folder: folder! });
+      if (rejected.length > 0) {
+        showToast(`${batch.total} file(s) queued for scanning — ${rejected.length} skipped (not a valid PDF).`);
+      } else {
+        showToast(`${batch.total} file(s) queued for scanning.`);
       }
-      // The folder's config rules were already confirmed before upload, so apply
-      // them straight away instead of stopping on a redundant per-job rules step.
-      await applyRules(job.id);
-      showToast(`Scan complete — ${job.entity_count} identifiers in ${job.class_count} classes.`);
-      navigate(`/jobs/${job.id}/review`);
+      setActiveBatch(batch.id);
+      navigate(`/uploads/${batch.id}/status`);
     } catch (err) {
       setError(err instanceof ApiError ? err.detail : 'Upload failed. Please try again.');
       setSubmitting(false);
@@ -141,6 +167,11 @@ export function UploadPage() {
         />
 
         {error && <ErrorBanner message={error} />}
+        {skipped.length > 0 && (
+          <ErrorBanner
+            message={`Skipped ${skipped.length} non-PDF file${skipped.length === 1 ? '' : 's'}: ${skipped.join(', ')}`}
+          />
+        )}
 
         <div className="card" style={{ padding: 24 }}>
           <div
@@ -165,30 +196,82 @@ export function UploadPage() {
               ref={inputRef}
               type="file"
               accept="application/pdf,.pdf"
+              multiple
               hidden
-              onChange={(e) => pickFile(e.target.files?.[0])}
+              onChange={(e) => pickFiles(e.target.files)}
+            />
+            <input
+              ref={folderInputRef}
+              type="file"
+              multiple
+              hidden
+              onChange={(e) => pickFiles(e.target.files)}
             />
             <div className="upload-doc-glyph" aria-hidden="true">
               <span style={{ top: 12 }} />
               <span style={{ top: 20 }} />
               <span style={{ top: 28, right: 16 }} />
             </div>
-            {file ? (
+            {files.length > 0 ? (
               <>
-                <div style={{ fontSize: 14, fontWeight: 500 }}>{file.name}</div>
+                <div style={{ fontSize: 14, fontWeight: 500 }}>
+                  {files.length} file{files.length === 1 ? '' : 's'} selected
+                </div>
                 <div className="page-subtitle" style={{ marginTop: 4, fontFamily: 'var(--font-mono)' }}>
-                  {(file.size / 1024).toFixed(0)} KB — click or drop to replace
+                  click or drop to add more
                 </div>
               </>
             ) : (
               <>
-                <div style={{ fontSize: 14, fontWeight: 500 }}>Drop a PDF here, or browse</div>
+                <div style={{ fontSize: 14, fontWeight: 500 }}>Drop PDFs here, or browse</div>
                 <div className="page-subtitle" style={{ marginTop: 4, fontFamily: 'var(--font-mono)' }}>
-                  PDF · up to 400 pages · 50 MB
+                  PDF · up to 400 pages · 50 MB each
                 </div>
               </>
             )}
           </div>
+
+          <div style={{ marginTop: 14, display: 'flex', gap: 8 }}>
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                inputRef.current?.click();
+              }}
+            >
+              Choose files
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                folderInputRef.current?.click();
+              }}
+            >
+              Choose folder
+            </button>
+          </div>
+
+          {files.length > 0 && (
+            <ul className="staged-file-list">
+              {files.map((f, i) => (
+                <li key={`${f.name}:${f.size}:${i}`} className="staged-file-row">
+                  <span className="staged-file-name">{f.name}</span>
+                  <span className="mono staged-file-size">{(f.size / 1024).toFixed(0)} KB</span>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-ghost"
+                    aria-label={`Remove ${f.name}`}
+                    onClick={() => removeFile(i)}
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
 
           <div style={{ marginTop: 20 }}>
             <div className="field-label" style={{ marginBottom: 2 }}>
@@ -237,8 +320,12 @@ export function UploadPage() {
           </div>
 
           <div style={{ marginTop: 24, display: 'flex', gap: 10 }}>
-            <button className="btn btn-primary" disabled={!file || submitting} onClick={onSubmit}>
-              {submitting ? 'Scanning…' : 'Scan for PHI'}
+            <button className="btn btn-primary" disabled={files.length === 0 || submitting} onClick={onSubmit}>
+              {submitting
+                ? 'Uploading…'
+                : files.length === 0
+                  ? 'Scan for PHI'
+                  : `Scan ${files.length} file${files.length === 1 ? '' : 's'}`}
             </button>
             <button className="btn" disabled={submitting} onClick={() => navigate(libraryHref)}>
               Cancel

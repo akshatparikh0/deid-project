@@ -32,6 +32,7 @@ did, so a genuinely short page never gets worse by attempting OCR.
 import io
 import re
 import shutil
+import threading
 
 import pdfplumber
 
@@ -42,6 +43,15 @@ _LINE_TOLERANCE = 2.0  # points; words within this vertical difference are on th
 _PARAGRAPH_GAP_MULTIPLIER = 1.6  # a gap bigger than this multiple of the line height starts a new paragraph
 
 PAGE_IMAGE_RESOLUTION = 150  # DPI for both the stored page preview image and OCR rasterization
+
+# pdfplumber's page.to_image() rasterizes via pdfium (libpdfium), which is
+# not safe to call from multiple threads of the same process at once — it
+# reliably segfaults the whole interpreter under concurrent use, which is
+# exactly what tasks.py's worker pool does (several jobs' 'parse' stage
+# running at the same time). Serializing the whole extract_blocks() call
+# below closes that hole; detection/transform/finalize for other jobs still
+# run concurrently, only PDF parsing itself queues up.
+_PDFIUM_LOCK = threading.Lock()
 
 _TESSERACT_AVAILABLE = shutil.which("tesseract") is not None
 
@@ -247,7 +257,7 @@ def extract_blocks(file_obj):
     pages = []
     index = 0
     try:
-        with pdfplumber.open(file_obj) as pdf:
+        with _PDFIUM_LOCK, pdfplumber.open(file_obj) as pdf:
             page_count = len(pdf.pages)
             if page_count == 0:
                 raise ExtractionError("The PDF has no pages.")

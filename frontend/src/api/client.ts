@@ -4,6 +4,7 @@ import type {
   AuditResponse,
   AuthResponse,
   Category,
+  CreateBatchResponse,
   EntitiesResponse,
   EntityResponse,
   ExportFormat,
@@ -19,6 +20,7 @@ import type {
   Mode,
   RuleResponse,
   RulesResponse,
+  UploadBatchResponse,
 } from './types';
 
 const BASE_URL: string =
@@ -132,6 +134,32 @@ export function createJob(params: CreateJobParams): Promise<JobResponse> {
   if (params.folder != null) form.append('folder', String(params.folder));
   if (params.preset) form.append('preset', params.preset);
   return request<JobResponse>('/jobs/', { method: 'POST', body: form });
+}
+
+export interface CreateBatchParams {
+  files: File[];
+  uploaded_by?: string;
+  department?: string;
+  folder: number;
+  preset?: Mode;
+}
+
+export function createUploadBatch(params: CreateBatchParams): Promise<CreateBatchResponse> {
+  const form = new FormData();
+  params.files.forEach((file) => form.append('files', file));
+  if (params.uploaded_by) form.append('uploaded_by', params.uploaded_by);
+  if (params.department) form.append('department', params.department);
+  form.append('folder', String(params.folder));
+  if (params.preset) form.append('preset', params.preset);
+  return request<CreateBatchResponse>('/uploads/', { method: 'POST', body: form });
+}
+
+export function getUploadBatch(id: number): Promise<UploadBatchResponse> {
+  return request<UploadBatchResponse>(`/uploads/${id}/`);
+}
+
+export function retryJob(id: number): Promise<JobResponse> {
+  return request<JobResponse>(`/jobs/${id}/retry/`, { method: 'POST' });
 }
 
 export function listJobs(params?: { folder?: number | null }): Promise<JobsResponse> {
