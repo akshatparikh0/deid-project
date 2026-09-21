@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { fetchAuthenticatedBlob } from '@/api/client';
 import type { Category, DocumentPage, Entity } from '@/api/types';
 import { categoryColor } from '@/lib/categories';
+import { cn } from '@/lib/utils';
 
 function hexToRgba(hex: string, alpha: number): string {
   const m = hex.replace('#', '');
@@ -33,8 +34,14 @@ function PageImage({ page }: { page: DocumentPage }) {
     };
   }, [page.image_url]);
 
-  if (!src) return <div className="pdf-page-loading">Loading page {page.number}…</div>;
-  return <img src={src} alt={`Page ${page.number}`} draggable={false} />;
+  if (!src) {
+    return (
+      <div className="text-muted-foreground flex h-full min-h-50 items-center justify-center text-xs">
+        Loading page {page.number}…
+      </div>
+    );
+  }
+  return <img src={src} alt={`Page ${page.number}`} draggable={false} className="block h-full w-full select-none" />;
 }
 
 function EntityOverlay({
@@ -70,7 +77,7 @@ function EntityOverlay({
         const fontSize = Math.max(8, Math.min(13, (box.bottom - box.top) * scale * 0.6));
         const overlayKey = `${entity.code}-${i}`;
         const common = {
-          className: 'pdf-page-overlay',
+          className: cn('cursor-pointer box-border transition-shadow duration-100'),
           'data-entity-code': entity.code,
           onClick: () => onSelect(entity.code),
         };
@@ -126,7 +133,7 @@ function EntityOverlay({
               style={{
                 ...style,
                 background: 'var(--mode-redact)',
-                boxShadow: selected ? '0 0 0 2px var(--color-success)' : lowConfidenceRing || 'none',
+                boxShadow: selected ? '0 0 0 2px var(--status-success)' : lowConfidenceRing || 'none',
               }}
             />
           );
@@ -232,7 +239,11 @@ function PageCanvas({
   }, [page.width]);
 
   return (
-    <div ref={containerRef} className="pdf-page" style={{ aspectRatio: `${page.width} / ${page.height}` }}>
+    <div
+      ref={containerRef}
+      className="border-border relative mb-1 w-full overflow-hidden border bg-white shadow-[0_1px_3px_rgba(0,0,0,0.1)]"
+      style={{ aspectRatio: `${page.width} / ${page.height}` }}
+    >
       <PageImage page={page} />
       {scale > 0 &&
         entities.map((entity) => (
@@ -279,12 +290,16 @@ export function PageImagePane({
   }, [selectedCode]);
 
   return (
-    <div className="card doc-pane">
-      <div className="doc-pane-header">{title}</div>
-      <div className="doc-pane-body doc-pane-body-pages" ref={bodyRef}>
+    <div className="border-border bg-card flex h-full min-h-0 flex-col overflow-hidden rounded-md border">
+      <div className="border-border text-muted-foreground flex-none border-b px-4 py-3 text-[11px] font-semibold tracking-[0.05em] uppercase">
+        {title}
+      </div>
+      <div className="bg-background flex-1 overflow-y-auto p-4.5" ref={bodyRef}>
         {pages.map((page) => (
           <div key={page.number}>
-            <div className="doc-page-break">Page {page.number}</div>
+            <div className="border-border text-muted-foreground first:border-t-0 first:pt-0 first:mt-0 mt-4.5 mb-2.5 border-t border-dashed pt-3 text-[10.5px] tracking-[0.06em] uppercase">
+              Page {page.number}
+            </div>
             <PageCanvas
               page={page}
               entities={entitiesByPage.get(page.number) ?? []}
@@ -296,7 +311,11 @@ export function PageImagePane({
             />
           </div>
         ))}
-        {pages.length === 0 && <div className="pdf-page-loading">No pages to display.</div>}
+        {pages.length === 0 && (
+          <div className="text-muted-foreground flex h-full min-h-50 items-center justify-center text-xs">
+            No pages to display.
+          </div>
+        )}
       </div>
     </div>
   );

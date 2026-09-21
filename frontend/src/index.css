@@ -1,1 +1,181 @@
-@import './theme.css';
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --radius: 0.5rem;
+
+  --background: #faf9f6;
+  --foreground: #1c1e21;
+
+  --card: #ffffff;
+  --card-foreground: #1c1e21;
+
+  --popover: #ffffff;
+  --popover-foreground: #1c1e21;
+
+  --primary: #12705c;
+  --primary-foreground: #ffffff;
+
+  --secondary: #f2f1ec;
+  --secondary-foreground: #1c1e21;
+
+  --muted: #f2f1ec;
+  --muted-foreground: #6b7178;
+
+  --accent: #f5f3ee;
+  --accent-foreground: #1c1e21;
+
+  --destructive: #a4291f;
+  --destructive-foreground: #ffffff;
+
+  --border: #e4e1d9;
+  --input: #e4e1d9;
+  --ring: #2d6fb8;
+
+  --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-serif: 'IBM Plex Serif', Georgia, serif;
+  --font-mono: 'IBM Plex Mono', 'SFMono-Regular', Menlo, monospace;
+
+  --shadow-sm: 0 1px 2px rgba(20, 20, 20, 0.06);
+  --shadow-md: 0 4px 16px rgba(20, 20, 20, 0.12);
+
+  /* App nav rail (dark, persistent — distinct from the light card/page theme) */
+  --nav-width: 216px;
+  --nav-bg: #0e1216;
+  --nav-text: #8c959e;
+  --nav-active-bg: #1b2229;
+  --nav-active-text: #f5f3ee;
+
+  /* Semantic status colors, used alongside shadcn's default/secondary/destructive */
+  --status-success: #12705c;
+  --status-success-hover: #0c5344;
+  --status-success-bg: #e8f1ed;
+  --status-warning: #b8792d;
+  --status-warning-bg: #fbf1e4;
+  --status-danger-bg: #fbeae8;
+  --status-info: #2d6fb8;
+  --status-info-bg: #eaf1fa;
+
+  /* PHI category accent colors (entity review / badges) */
+  --cat-name: #7c4dbc;
+  --cat-geo: #2d6fb8;
+  --cat-date: #b8792d;
+  --cat-phone: #1f8a70;
+  --cat-fax: #1f8a70;
+  --cat-email: #1f8a70;
+  --cat-ssn: #a4291f;
+  --cat-mrn: #a4291f;
+  --cat-plan: #a4291f;
+  --cat-account: #8a5a1b;
+  --cat-license: #8a5a1b;
+  --cat-vehicle: #5b6770;
+  --cat-device: #5b6770;
+  --cat-url: #2d6fb8;
+  --cat-ip: #2d6fb8;
+  --cat-biometric: #7c4dbc;
+  --cat-photo: #7c4dbc;
+  --cat-other: #5b6770;
+
+  /* De-identification mode colors (mirrored between entity list and doc-span highlighting) */
+  --mode-redact: #111418;
+  --mode-mask: var(--status-success-hover);
+  --mode-mask-bg: var(--status-success-bg);
+  --mode-pseudo: #2d6fb8;
+  --mode-keep: #b8792d;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --font-sans: var(--font-sans);
+  --font-serif: var(--font-serif);
+  --font-mono: var(--font-mono);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-nav-bg: var(--nav-bg);
+  --color-nav-text: var(--nav-text);
+  --color-nav-active-bg: var(--nav-active-bg);
+  --color-nav-active-text: var(--nav-active-text);
+
+  --color-status-success: var(--status-success);
+  --color-status-success-hover: var(--status-success-hover);
+  --color-status-success-bg: var(--status-success-bg);
+  --color-status-warning: var(--status-warning);
+  --color-status-warning-bg: var(--status-warning-bg);
+  --color-status-danger-bg: var(--status-danger-bg);
+  --color-status-info: var(--status-info);
+  --color-status-info-bg: var(--status-info-bg);
+
+  --color-cat-name: var(--cat-name);
+  --color-cat-geo: var(--cat-geo);
+  --color-cat-date: var(--cat-date);
+  --color-cat-phone: var(--cat-phone);
+  --color-cat-fax: var(--cat-fax);
+  --color-cat-email: var(--cat-email);
+  --color-cat-ssn: var(--cat-ssn);
+  --color-cat-mrn: var(--cat-mrn);
+  --color-cat-plan: var(--cat-plan);
+  --color-cat-account: var(--cat-account);
+  --color-cat-license: var(--cat-license);
+  --color-cat-vehicle: var(--cat-vehicle);
+  --color-cat-device: var(--cat-device);
+  --color-cat-url: var(--cat-url);
+  --color-cat-ip: var(--cat-ip);
+  --color-cat-biometric: var(--cat-biometric);
+  --color-cat-photo: var(--cat-photo);
+  --color-cat-other: var(--cat-other);
+
+  --color-mode-redact: var(--mode-redact);
+  --color-mode-mask: var(--mode-mask);
+  --color-mode-mask-bg: var(--mode-mask-bg);
+  --color-mode-pseudo: var(--mode-pseudo);
+  --color-mode-keep: var(--mode-keep);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-sans text-sm antialiased;
+  }
+  code,
+  .mono {
+    @apply font-mono;
+  }
+  #root {
+    min-height: 100vh;
+  }
+}

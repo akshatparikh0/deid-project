@@ -1,5 +1,7 @@
+import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { TriangleAlert } from 'lucide-react';
 import {
   ApiError,
   bulkUpdateEntities,
@@ -13,6 +15,9 @@ import {
 import type { Category, DocumentPayload, Entity, Job, Mode } from '@/api/types';
 import { StatusBadge } from '@/components/StatusBadge';
 import { ErrorBanner, LoadingState } from '@/components/States';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { cn } from '@/lib/utils';
 import { getDisplayThreshold } from '@/lib/threshold';
 import { showToast } from '@/lib/toast';
 import { setActiveJob } from '@/stores/activeJob';
@@ -163,7 +168,7 @@ export function ReviewPage() {
   const progressPct = entities.length === 0 ? 0 : Math.round((resolvedCount / entities.length) * 100);
   const showOriginal = paneView !== 'deidentified';
   const showDeid = paneView !== 'original';
-  const gridColumns = [
+  const gridTemplateColumns = [
     showOriginal ? '1fr' : null,
     showDeid ? '1fr' : null,
     inspectorOpen ? '320px' : null,
@@ -172,104 +177,77 @@ export function ReviewPage() {
     .join(' ');
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 56px)' }}>
-      <div
-        className="card"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '12px 18px',
-          padding: '14px 18px',
-          marginBottom: 16,
-        }}
-      >
-        <div style={{ minWidth: 220, maxWidth: 320 }}>
-          <div
-            style={{
-              fontSize: 15.5,
-              fontWeight: 600,
-              letterSpacing: '-0.01em',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
+    <div className="flex h-[calc(100vh-56px)] flex-col">
+      <div className="bg-card border-border mb-4 flex flex-wrap items-center gap-x-4.5 gap-y-3 rounded-md border px-4.5 py-3.5">
+        <div className="min-w-55 max-w-80">
+          <div className="overflow-hidden text-[15.5px] font-semibold tracking-[-0.01em] text-ellipsis whitespace-nowrap">
             {job.filename}
           </div>
-          <div className="mono page-subtitle" style={{ margin: 0, whiteSpace: 'nowrap' }}>
+          <div className="text-muted-foreground font-mono text-[13.5px] whitespace-nowrap">
             {job.code} · {job.pages} page{job.pages === 1 ? '' : 's'} ·{' '}
             <Link to={`/jobs/${jobId}/rules`}>Rules</Link> · <Link to={`/jobs/${jobId}/audit`}>Audit trail</Link>
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginLeft: 8 }}>
-          <div style={{ fontSize: 11, color: 'var(--color-text-faint)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-            Resolved
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-            <div className="progress-track">
+        <div className="ml-2 flex flex-col gap-1.25">
+          <div className="text-muted-foreground text-[11px] tracking-[0.05em] uppercase">Resolved</div>
+          <div className="flex items-center gap-2.25">
+            <div className="bg-muted h-1.25 w-37.5 overflow-hidden rounded-full">
               <div
-                className={`progress-fill${unresolvedCount > 0 ? ' progress-fill-attention' : ''}`}
+                className={cn(
+                  'h-full rounded-full transition-[width] duration-200',
+                  unresolvedCount > 0 ? 'bg-status-warning' : 'bg-status-success',
+                )}
                 style={{ width: `${progressPct}%` }}
               />
             </div>
-            <span className="mono" style={{ fontSize: 12 }}>
+            <span className="font-mono text-xs">
               {resolvedCount} / {entities.length}
             </span>
           </div>
         </div>
 
-        <div style={{ marginLeft: 'auto', display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 9 }}>
-          <div className="seg-group">
-            {(
-              [
-                ['both', 'Both'],
-                ['original', 'Original'],
-                ['deidentified', 'Output'],
-              ] as [PaneView, string][]
-            ).map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                className={`seg-btn${paneView === key ? ' seg-btn-active' : ''}`}
-                onClick={() => setPaneView(key)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <button className="btn btn-sm" onClick={() => setInspectorOpen((v) => !v)}>
+        <div className="ml-auto flex flex-wrap justify-end gap-2.25">
+          <Tabs value={paneView} onValueChange={(v) => setPaneView(v as PaneView)}>
+            <TabsList>
+              <TabsTrigger value="both">Both</TabsTrigger>
+              <TabsTrigger value="original">Original</TabsTrigger>
+              <TabsTrigger value="deidentified">Output</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <Button variant="outline" size="sm" onClick={() => setInspectorOpen((v) => !v)}>
             {inspectorOpen ? 'Hide entities' : 'Show entities'}
-          </button>
-          <button className="btn btn-sm" disabled={bulkBusy || isComplete} onClick={() => handleBulk('redact')}>
+          </Button>
+          <Button variant="outline" size="sm" disabled={bulkBusy || isComplete} onClick={() => handleBulk('redact')}>
             Redact all
-          </button>
-          <button className="btn btn-sm" disabled={bulkBusy || isComplete} onClick={() => handleBulk('mask')}>
+          </Button>
+          <Button variant="outline" size="sm" disabled={bulkBusy || isComplete} onClick={() => handleBulk('mask')}>
             Mask all
-          </button>
-          <button className="btn btn-sm" onClick={() => setExportOpen(true)}>
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setExportOpen(true)}>
             Export
-          </button>
+          </Button>
           {isComplete ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 9, paddingLeft: 9, borderLeft: '1px solid var(--color-border)' }}>
+            <div className="border-border flex items-center gap-2.25 border-l pl-2.25">
               <StatusBadge status={job.status} />
-              <button className="btn btn-sm" disabled={lifecycleBusy} onClick={handleReopen}>
+              <Button variant="outline" size="sm" disabled={lifecycleBusy} onClick={handleReopen}>
                 Reopen
-              </button>
+              </Button>
             </div>
           ) : (
-            <button
-              className="btn btn-sm btn-primary"
+            <Button
+              size="sm"
               disabled={lifecycleBusy}
               title={unresolvedCount > 0 ? `${unresolvedCount} entities still need a decision` : undefined}
               onClick={() => handleComplete(false)}
             >
               Mark complete
-            </button>
+            </Button>
           )}
-          <button
-            className="btn btn-sm"
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-border ml-2.25 border-l pl-2.25"
             title={
               openedFrom === 'status' && job.batch != null
                 ? 'Close file and return to upload status'
@@ -280,32 +258,34 @@ export function ReviewPage() {
               setActiveJob(null);
               navigate(dest);
             }}
-            style={{ marginLeft: 9, paddingLeft: 9, borderLeft: '1px solid var(--color-border)' }}
           >
             Close
-          </button>
+          </Button>
         </div>
       </div>
 
       {actionError && <ErrorBanner message={actionError} />}
 
       {confirmingComplete !== null && (
-        <div className="error-banner" style={{ alignItems: 'center' }}>
-          <span aria-hidden="true">&#9888;</span>
-          <div style={{ flex: 1 }}>
+        <div className="bg-status-danger-bg text-destructive border-destructive/20 mb-4.5 flex items-center gap-2.5 rounded-md border px-3.5 py-3 text-[13px]">
+          <TriangleAlert className="size-4 shrink-0" aria-hidden="true" />
+          <div className="flex-1">
             {confirmingComplete} entit{confirmingComplete === 1 ? 'y is' : 'ies are'} still kept
             as-is. Complete anyway?
           </div>
-          <button className="btn btn-sm" onClick={() => setConfirmingComplete(null)}>
+          <Button variant="outline" size="sm" onClick={() => setConfirmingComplete(null)}>
             Cancel
-          </button>
-          <button className="btn btn-sm btn-danger" onClick={() => handleComplete(true)}>
+          </Button>
+          <Button variant="destructive" size="sm" onClick={() => handleComplete(true)}>
             Complete anyway
-          </button>
+          </Button>
         </div>
       )}
 
-      <div className="review-grid" style={{ gridTemplateColumns: gridColumns }}>
+      <div
+        className="grid min-h-0 flex-1 grid-cols-[var(--review-grid-cols)] gap-4 max-lg:h-auto max-lg:grid-cols-1"
+        style={{ '--review-grid-cols': gridTemplateColumns } as CSSProperties}
+      >
         {showOriginal && (
           <PageImagePane
             title="Original — PHI highlighted"

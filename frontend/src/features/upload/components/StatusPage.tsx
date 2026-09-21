@@ -4,7 +4,11 @@ import { ApiError, getUploadBatch, retryJob } from '@/api/client';
 import type { Job, JobStage, StageName, UploadBatch } from '@/api/types';
 import { PageHeader } from '@/components/Layout';
 import { ErrorBanner, LoadingState } from '@/components/States';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
 import { formatDuration } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import { setActiveBatch } from '@/stores/activeJob';
 
 const STAGE_LABELS: Record<StageName, string> = {
@@ -36,23 +40,34 @@ function currentPhaseLabel(job: Job): string {
 
 function StageTimeline({ stages }: { stages: JobStage[] }) {
   return (
-    <div className="stage-timeline">
+    <div className="flex flex-1 basis-80 items-center gap-1">
       {stages.map((stage, i) => (
-        <div className="stage-step" key={stage.name}>
-          <div className="stage-label-group">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5" key={stage.name}>
+          <div className="flex min-w-0 flex-col gap-px">
             <span
-              className={`stage-label${stage.status === 'running' ? ' stage-label-running' : ''}${
-                stage.status === 'failed' ? ' stage-label-failed' : ''
-              }`}
+              className={cn(
+                'text-muted-foreground flex items-center text-[11px] whitespace-nowrap',
+                stage.status === 'running' && 'text-status-info font-semibold',
+                stage.status === 'failed' && 'text-destructive font-semibold',
+              )}
             >
-              <span className={`stage-dot stage-dot-${stage.status}`} style={{ marginRight: 5 }} />
+              <span
+                className={cn(
+                  'border-border bg-card mr-1.25 size-2.25 shrink-0 rounded-full border-1.5',
+                  stage.status === 'done' && 'border-status-success bg-status-success',
+                  stage.status === 'running' && 'border-status-info bg-status-info animate-pulse',
+                  stage.status === 'failed' && 'border-destructive bg-destructive',
+                )}
+              />
               {STAGE_LABELS[stage.name]}
             </span>
             {stage.duration_seconds != null && (stage.status === 'done' || stage.status === 'failed') && (
-              <span className="stage-duration">{formatDuration(stage.duration_seconds)}</span>
+              <span className="text-muted-foreground font-mono text-[10.5px] whitespace-nowrap">
+                {formatDuration(stage.duration_seconds)}
+              </span>
             )}
           </div>
-          {i < stages.length - 1 && <div className="stage-connector" />}
+          {i < stages.length - 1 && <div className="bg-border h-px min-w-2 flex-1" />}
         </div>
       ))}
     </div>
@@ -129,21 +144,22 @@ export function StatusPage() {
 
       {error && <ErrorBanner message={error} />}
 
-      <div className="batch-progress-track">
-        <div className="batch-progress-fill" style={{ width: `${progressPct}%` }} />
-      </div>
+      <Progress value={progressPct} className="h-1.5" />
 
-      <div className="card" style={{ marginTop: 20 }}>
+      <Card className="mt-5 gap-0 py-0">
         {batch.jobs.map((job) => {
           const canReview = job.status === 'in_review' || job.status === 'complete';
           return (
-            <div key={job.id} className="batch-file-row">
-              <div className="batch-file-name" title={job.filename}>
+            <div
+              key={job.id}
+              className="border-border flex flex-wrap items-center gap-4 border-b px-4 py-3.5 last:border-b-0"
+            >
+              <div className="flex-1 basis-50 overflow-hidden text-[13.5px] font-medium text-ellipsis whitespace-nowrap" title={job.filename}>
                 {job.filename}
               </div>
 
               {job.status === 'failed' ? (
-                <div style={{ flex: '2 1 320px' }}>
+                <div className="flex-2 basis-80">
                   <ErrorBanner
                     message={job.error_message || 'This file could not be processed.'}
                     onRetry={retrying === job.id ? undefined : () => onRetry(job.id)}
@@ -152,26 +168,26 @@ export function StatusPage() {
               ) : (
                 <>
                   <StageTimeline stages={job.stages ?? []} />
-                  <span className="stage-label" style={{ flex: '0 0 100px' }}>
+                  <span className="text-muted-foreground flex-none basis-25 text-[11px]">
                     {currentPhaseLabel(job)}
                   </span>
                 </>
               )}
 
-              <div className="batch-file-actions">
-                <button
+              <div className="flex flex-none gap-2">
+                <Button
                   type="button"
-                  className="btn btn-sm btn-primary"
+                  size="sm"
                   disabled={!canReview}
                   onClick={() => navigate(`/jobs/${job.id}/review`, { state: { from: 'status' } })}
                 >
                   Review
-                </button>
+                </Button>
               </div>
             </div>
           );
         })}
-      </div>
+      </Card>
     </div>
   );
 }

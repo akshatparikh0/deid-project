@@ -1,6 +1,16 @@
 import { useState } from 'react';
 import { ApiError } from '@/api/client';
 import { ErrorBanner } from '@/components/States';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 export function NamePromptModal({
   title,
@@ -39,16 +49,15 @@ export function NamePromptModal({
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-panel" style={{ maxWidth: 400 }} onClick={(e) => e.stopPropagation()}>
-        <h2 className="modal-title">{title}</h2>
-        <div className="auth-field" style={{ marginTop: 14 }}>
-          <label className="field-label" htmlFor="name-prompt-input">
-            {label}
-          </label>
-          <input
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-105">
+        <DialogHeader>
+          <DialogTitle className="font-serif text-[19px]">{title}</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="name-prompt-input">{label}</Label>
+          <Input
             id="name-prompt-input"
-            className="text-input"
             type="text"
             autoFocus
             value={value}
@@ -59,15 +68,15 @@ export function NamePromptModal({
           />
         </div>
         {error && <ErrorBanner message={error} />}
-        <div className="modal-actions">
-          <button className="btn" onClick={onClose} disabled={submitting}>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={submitting}>
             Cancel
-          </button>
-          <button className="btn btn-primary" onClick={submit} disabled={submitting}>
+          </Button>
+          <Button onClick={submit} disabled={submitting}>
             {submitting ? 'Saving…' : confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

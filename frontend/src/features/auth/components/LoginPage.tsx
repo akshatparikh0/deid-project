@@ -4,6 +4,10 @@ import { useSyncExternalStore } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { ApiError } from '@/api/client';
 import { ErrorBanner } from '@/components/States';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { getAuthStatusSnapshot, login, subscribeAuth } from '@/lib/auth';
 
 export function LoginPage() {
@@ -34,55 +38,63 @@ export function LoginPage() {
   }
 
   return (
-    <div className="auth-shell">
-      <div className="auth-card">
-        <div className="auth-brand">
-          Safe Harbor
-          <small>45 CFR §164.514(b)(2)</small>
-        </div>
-        <p className="auth-subtitle">Sign in to continue to the de-identification workspace.</p>
-
-        {error && <ErrorBanner message={error} />}
-
-        <form onSubmit={onSubmit}>
-          <div className="auth-field">
-            <label className="field-label" htmlFor="username">
-              Username
-            </label>
-            <input
-              id="username"
-              className="text-input"
-              type="text"
-              autoComplete="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-              autoFocus
-            />
+    <div className="bg-background flex min-h-screen items-center justify-center p-6">
+      <Card className="w-full max-w-[380px] p-7">
+        <CardHeader className="px-0">
+          <div>
+            <div className="font-serif text-foreground text-xl font-semibold">
+              Safe Harbor
+              <small className="font-mono text-muted-foreground mt-1.5 block text-[10px] font-normal tracking-[0.1em]">
+                45 CFR §164.514(b)(2)
+              </small>
+            </div>
+            <p className="text-muted-foreground mt-2 mb-0 text-[13px]">
+              Sign in to continue to the de-identification workspace.
+            </p>
           </div>
-          <div className="auth-field">
-            <label className="field-label" htmlFor="password">
-              Password
-            </label>
-            <input
-              id="password"
-              className="text-input"
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
-          <button className="btn btn-primary" type="submit" disabled={submitting} style={{ width: '100%' }}>
-            {submitting ? 'Signing in…' : 'Sign in'}
-          </button>
-        </form>
+        </CardHeader>
 
-        <div className="auth-footer">
-          Don't have an account? <Link to="/register">Register</Link>
-        </div>
-      </div>
+        <CardContent className="px-0">
+          {error && <ErrorBanner message={error} />}
+
+          <form onSubmit={onSubmit}>
+            <div className="mb-3.5">
+              <Label htmlFor="username" className="text-muted-foreground mb-1.5 text-xs font-semibold">
+                Username
+              </Label>
+              <Input
+                id="username"
+                type="text"
+                autoComplete="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+                autoFocus
+              />
+            </div>
+            <div className="mb-3.5">
+              <Label htmlFor="password" className="text-muted-foreground mb-1.5 text-xs font-semibold">
+                Password
+              </Label>
+              <Input
+                id="password"
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
+            <Button type="submit" disabled={submitting} className="w-full">
+              {submitting ? 'Signing in…' : 'Sign in'}
+            </Button>
+          </form>
+
+          <div className="text-muted-foreground mt-5 text-center text-[12.5px]">
+            Don't have an account? <Link to="/register">Register</Link>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

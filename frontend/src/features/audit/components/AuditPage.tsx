@@ -3,8 +3,11 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ApiError, exportJob, getAudit, getJob, reopenJob, resolveApiUrl } from '@/api/client';
 import type { AuditRow, Job } from '@/api/types';
 import { CategoryBadge } from '@/components/CategoryBadge';
+import { PageHeader } from '@/components/Layout';
 import { StatusBadge } from '@/components/StatusBadge';
 import { EmptyState, ErrorBanner, LoadingState } from '@/components/States';
+import { Button } from '@/components/ui/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatDateTime, formatPercent } from '@/lib/format';
 import { setActiveJob } from '@/stores/activeJob';
 import { ModePill } from './ModePill';
@@ -72,77 +75,70 @@ export function AuditPage() {
 
   return (
     <div>
-      <div className="page-header">
-        <div>
-          <Link to="/queue" style={{ fontSize: 12, fontWeight: 500 }}>
-            ← Document library
-          </Link>
-          <h1 className="page-title" style={{ marginTop: 5 }}>
-            Audit record — {job.code}
-          </h1>
-          <p className="page-subtitle">
-            Immutable log of every identifier found and the transformation applied. Values are
-            hashed, never stored in clear text.
-          </p>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          <StatusBadge status={job.status} />
-          {job.status === 'complete' ? (
-            <button className="btn btn-sm" disabled={reopening} onClick={onReopen}>
-              {reopening ? 'Reopening…' : 'Reopen for review'}
-            </button>
-          ) : (
-            <Link to={`/jobs/${jobId}/review`} className="btn btn-sm">
-              Continue review
-            </Link>
-          )}
-          <button className="btn btn-sm btn-primary" onClick={onExportCsv} disabled={exporting}>
-            {exporting ? 'Exporting…' : 'Export CSV'}
-          </button>
-        </div>
-      </div>
+      <Link to="/queue" className="mb-1.5 inline-block text-xs font-medium text-muted-foreground hover:text-foreground">
+        ← Document library
+      </Link>
+      <PageHeader
+        title={`Audit record — ${job.code}`}
+        subtitle="Immutable log of every identifier found and the transformation applied. Values are hashed, never stored in clear text."
+        actions={
+          <div className="flex items-center gap-2">
+            <StatusBadge status={job.status} />
+            {job.status === 'complete' ? (
+              <Button variant="outline" size="sm" disabled={reopening} onClick={onReopen}>
+                {reopening ? 'Reopening…' : 'Reopen for review'}
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" asChild>
+                <Link to={`/jobs/${jobId}/review`}>Continue review</Link>
+              </Button>
+            )}
+            <Button size="sm" onClick={onExportCsv} disabled={exporting}>
+              {exporting ? 'Exporting…' : 'Export CSV'}
+            </Button>
+          </div>
+        }
+      />
 
       {exportError && <ErrorBanner message={exportError} />}
       {reopenError && <ErrorBanner message={reopenError} />}
 
       {rows.length === 0 ? (
-        <div className="card">
+        <div className="rounded-lg border border-border bg-card">
           <EmptyState title="No audit rows yet" description="No entities have been recorded for this job." />
         </div>
       ) : (
-        <div className="card" style={{ overflowX: 'auto' }}>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Entity</th>
-                <th>Class</th>
-                <th>Value hash</th>
-                <th>Action</th>
-                <th>Detector</th>
-                <th>Conf.</th>
-                <th>Timestamp</th>
-              </tr>
-            </thead>
-            <tbody>
+        <div className="overflow-x-auto rounded-lg border border-border bg-card">
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Entity</TableHead>
+                <TableHead>Class</TableHead>
+                <TableHead>Value hash</TableHead>
+                <TableHead>Action</TableHead>
+                <TableHead>Detector</TableHead>
+                <TableHead>Conf.</TableHead>
+                <TableHead>Timestamp</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {rows.map((row) => (
-                <tr key={row.entity_code}>
-                  <td className="mono">{row.entity_code}</td>
-                  <td>
+                <TableRow key={row.entity_code} className="hover:bg-transparent">
+                  <TableCell className="font-mono">{row.entity_code}</TableCell>
+                  <TableCell>
                     <CategoryBadge category={row.category} />
-                  </td>
-                  <td className="mono" style={{ fontSize: 12 }}>
-                    {row.value_hash}
-                  </td>
-                  <td>
+                  </TableCell>
+                  <TableCell className="font-mono text-xs">{row.value_hash}</TableCell>
+                  <TableCell>
                     <ModePill mode={row.action} />
-                  </td>
-                  <td>{row.detector}</td>
-                  <td>{formatPercent(row.confidence)}</td>
-                  <td>{formatDateTime(row.created_at)}</td>
-                </tr>
+                  </TableCell>
+                  <TableCell>{row.detector}</TableCell>
+                  <TableCell>{formatPercent(row.confidence)}</TableCell>
+                  <TableCell>{formatDateTime(row.created_at)}</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       )}
     </div>

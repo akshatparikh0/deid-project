@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Folder as FolderIcon } from 'lucide-react';
 import {
   ApiError,
   createFolder,
@@ -15,6 +16,10 @@ import { ConfirmModal } from '@/components/ConfirmModal';
 import { PageHeader } from '@/components/Layout';
 import { StatusBadge } from '@/components/StatusBadge';
 import { EmptyState, ErrorBanner, LoadingState } from '@/components/States';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 import { folderLevel, pathTo } from '@/lib/folders';
 import { formatRelative } from '@/lib/format';
 import { routeForJobStatus } from '@/lib/jobRoute';
@@ -154,32 +159,40 @@ export function QueuePage() {
         actions={
           <>
             {canCreateFolder && (
-              <button className="btn" onClick={() => setModal({ kind: 'newFolder' })}>
+              <Button variant="outline" onClick={() => setModal({ kind: 'newFolder' })}>
                 New {kindLabel}
-              </button>
+              </Button>
             )}
             {canConfigureRules && (
-              <Link to={rulesHref} className="btn btn-primary">
-                Add document
-              </Link>
+              <Button asChild>
+                <Link to={rulesHref}>Add document</Link>
+              </Button>
             )}
           </>
         }
       />
 
-      <div className="breadcrumbs" style={{ marginBottom: 14 }}>
-        <button type="button" className="breadcrumb-item" onClick={() => openFolder(null)}>
+      <div className="mb-3.5 flex flex-wrap items-center gap-0.5 text-[13px]">
+        <button
+          type="button"
+          className="rounded px-1 py-0.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          onClick={() => openFolder(null)}
+        >
           Projects
         </button>
         {trail.map((folder, i) => (
-          <span key={folder.id}>
-            <span className="breadcrumb-sep" aria-hidden="true">
+          <span key={folder.id} className="flex items-center gap-0.5">
+            <span className="mx-0.5 text-muted-foreground/50" aria-hidden="true">
               /
             </span>
             {i === trail.length - 1 ? (
-              <span className="breadcrumb-item breadcrumb-current">{folder.name}</span>
+              <span className="rounded px-1 py-0.5 font-semibold text-foreground">{folder.name}</span>
             ) : (
-              <button type="button" className="breadcrumb-item" onClick={() => openFolder(folder.id)}>
+              <button
+                type="button"
+                className="rounded px-1 py-0.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                onClick={() => openFolder(folder.id)}
+              >
                 {folder.name}
               </button>
             )}
@@ -192,7 +205,7 @@ export function QueuePage() {
       {loading && !folders && <LoadingState label="Loading document library…" />}
 
       {!loading && folders && children.length === 0 && jobs && jobs.length === 0 && (
-        <div className="card">
+        <div className="rounded-lg border border-border bg-card">
           <EmptyState
             title={isPatientFolder ? 'No documents yet' : `No ${trail.length ? 'patients' : 'projects'} yet`}
             description={
@@ -204,13 +217,11 @@ export function QueuePage() {
             }
             action={
               canConfigureRules ? (
-                <Link to={rulesHref} className="btn btn-primary">
-                  Add document
-                </Link>
+                <Button asChild>
+                  <Link to={rulesHref}>Add document</Link>
+                </Button>
               ) : (
-                <button className="btn btn-primary" onClick={() => setModal({ kind: 'newFolder' })}>
-                  New {kindLabel}
-                </button>
+                <Button onClick={() => setModal({ kind: 'newFolder' })}>New {kindLabel}</Button>
               )
             }
           />
@@ -218,149 +229,150 @@ export function QueuePage() {
       )}
 
       {children.length > 0 && (
-        <div className="card" style={{ overflowX: 'auto', marginBottom: jobs && jobs.length > 0 ? 16 : 0 }}>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Contains</th>
-                <th>Updated</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
+        <div
+          className={cn(
+            'overflow-x-auto rounded-lg border border-border bg-card',
+            jobs && jobs.length > 0 ? 'mb-4' : undefined,
+          )}
+        >
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Name</TableHead>
+                <TableHead>Contains</TableHead>
+                <TableHead>Updated</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {children.map((folder) => (
-                <tr key={folder.id} className="clickable" onClick={() => openFolder(folder.id)}>
-                  <td>
-                    <span className="folder-icon" aria-hidden="true" />
-                    <span style={{ fontWeight: 500 }}>{folder.name}</span>
-                  </td>
-                  <td className="page-subtitle" style={{ margin: 0 }}>
+                <TableRow key={folder.id} className="cursor-pointer" onClick={() => openFolder(folder.id)}>
+                  <TableCell className="whitespace-normal">
+                    <div className="flex items-center gap-2 font-medium">
+                      <FolderIcon className="size-3.5 shrink-0 text-status-warning" aria-hidden="true" />
+                      {folder.name}
+                    </div>
+                  </TableCell>
+                  <TableCell className="whitespace-normal text-muted-foreground">
                     {folder.subfolder_count > 0 &&
                       `${folder.subfolder_count} ${folder.subfolder_count === 1 ? 'folder' : 'folders'}`}
                     {folder.subfolder_count > 0 && folder.document_count > 0 && ', '}
                     {folder.document_count > 0 &&
                       `${folder.document_count} ${folder.document_count === 1 ? 'document' : 'documents'}`}
                     {folder.subfolder_count === 0 && folder.document_count === 0 && 'Empty'}
-                  </td>
-                  <td>{formatRelative(folder.updated_at)}</td>
-                  <td onClick={(e) => e.stopPropagation()}>
-                    <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                      <button
+                  </TableCell>
+                  <TableCell>{formatRelative(folder.updated_at)}</TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <div className="flex justify-end gap-1.5">
+                      <Button
                         type="button"
-                        className="btn btn-sm btn-ghost"
+                        variant="ghost"
+                        size="sm"
                         onClick={() => setModal({ kind: 'renameFolder', folder })}
                       >
                         Rename
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
-                        className="btn btn-sm btn-ghost"
-                        style={{ color: 'var(--color-danger)' }}
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                         onClick={() => setConfirm({ kind: 'deleteFolder', folder })}
                       >
                         Delete
-                      </button>
+                      </Button>
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       )}
 
       {jobs && jobs.length > 0 && (
-        <div className="card" style={{ overflowX: 'auto' }}>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Document</th>
-                <th>Job</th>
-                <th>Pages</th>
-                <th>PHI found</th>
-                <th>Status</th>
-                <th>Updated</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
+        <div className="overflow-x-auto rounded-lg border border-border bg-card">
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Document</TableHead>
+                <TableHead>Job</TableHead>
+                <TableHead>Pages</TableHead>
+                <TableHead>PHI found</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Updated</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {jobs.map((job) => {
                 const dest = routeForJob(job);
                 const meta = [job.uploaded_by, job.department].filter(Boolean).join(' · ');
                 return (
-                  <tr
+                  <TableRow
                     key={job.id}
-                    className={dest ? 'clickable' : undefined}
+                    className={dest ? 'cursor-pointer' : undefined}
                     onClick={dest ? () => navigate(dest, { state: { from: 'queue' } }) : undefined}
                   >
-                    <td>
-                      <div style={{ fontWeight: 500 }}>{job.filename}</div>
-                      {meta && (
-                        <div className="page-subtitle" style={{ margin: 0, fontSize: 11.5 }}>
-                          {meta}
-                        </div>
-                      )}
-                    </td>
-                    <td className="mono">{job.code}</td>
-                    <td>{job.pages}</td>
-                    <td>
+                    <TableCell className="whitespace-normal">
+                      <div className="font-medium">{job.filename}</div>
+                      {meta && <div className="mt-0.5 text-[11.5px] text-muted-foreground">{meta}</div>}
+                    </TableCell>
+                    <TableCell className="font-mono">{job.code}</TableCell>
+                    <TableCell>{job.pages}</TableCell>
+                    <TableCell className="whitespace-normal">
                       {job.status === 'failed' ? (
-                        <span style={{ color: 'var(--color-danger)' }}>
-                          {job.error_message || 'Could not process file'}
-                        </span>
+                        <span className="text-destructive">{job.error_message || 'Could not process file'}</span>
                       ) : (
                         <>
                           {job.entity_count} across {job.class_count}{' '}
                           {job.class_count === 1 ? 'class' : 'classes'}
                           {job.unresolved_count > 0 && (
-                            <span
-                              className="badge"
-                              style={{
-                                marginLeft: 6,
-                                background: 'var(--color-warning-bg)',
-                                color: 'var(--color-warning)',
-                              }}
+                            <Badge
+                              variant="outline"
+                              className="ml-1.5 border-transparent bg-status-warning-bg text-status-warning"
                             >
                               {job.unresolved_count} unresolved
-                            </span>
+                            </Badge>
                           )}
                         </>
                       )}
-                    </td>
-                    <td>
+                    </TableCell>
+                    <TableCell>
                       <StatusBadge status={job.status} />
-                    </td>
-                    <td>{formatRelative(job.updated_at)}</td>
-                    <td onClick={(e) => e.stopPropagation()}>
-                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                    </TableCell>
+                    <TableCell>{formatRelative(job.updated_at)}</TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <div className="flex flex-wrap justify-end gap-1.5">
                         {job.status !== 'failed' && (
-                          <Link to={`/jobs/${job.id}/audit`} className="btn btn-sm btn-ghost">
-                            View
-                          </Link>
+                          <Button asChild variant="ghost" size="sm">
+                            <Link to={`/jobs/${job.id}/audit`}>View</Link>
+                          </Button>
                         )}
-                        <button
+                        <Button
                           type="button"
-                          className="btn btn-sm btn-ghost"
+                          variant="ghost"
+                          size="sm"
                           onClick={() => setModal({ kind: 'renameJob', job })}
                         >
                           Rename
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           type="button"
-                          className="btn btn-sm btn-ghost"
-                          style={{ color: 'var(--color-danger)' }}
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                           onClick={() => setConfirm({ kind: 'deleteJob', job })}
                         >
                           Delete
-                        </button>
+                        </Button>
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 );
               })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       )}
 

@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import type { DragEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { FileText, X } from 'lucide-react';
 import { ApiError, createUploadBatch, listFolders } from '@/api/client';
 import type { Mode } from '@/api/types';
 import { PageHeader } from '@/components/Layout';
 import { EmptyState, ErrorBanner, LoadingState } from '@/components/States';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { isPatientFolder } from '@/lib/folders';
 import { showToast } from '@/lib/toast';
+import { cn } from '@/lib/utils';
 import { setActiveBatch } from '@/stores/activeJob';
 
 const PRESETS: {
@@ -136,31 +140,31 @@ export function UploadPage() {
 
   if (!folderValid) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center' }}>
-        <div style={{ width: '100%', maxWidth: 680 }}>
+      <div className="flex justify-center">
+        <div className="w-full max-w-170">
           <PageHeader
             title="New de-identification job"
             subtitle="Files are processed in an isolated enclave. Source documents are purged after export."
           />
-          <div className="card">
+          <Card className="p-6">
             <EmptyState
               title="Choose a patient folder first"
               description="Documents can only be uploaded inside a patient folder. Open a patient folder in the document library, then upload from there."
               action={
-                <Link to="/queue" className="btn btn-primary">
-                  Go to document library
-                </Link>
+                <Button asChild>
+                  <Link to="/queue">Go to document library</Link>
+                </Button>
               }
             />
-          </div>
+          </Card>
         </div>
       </div>
     );
   }
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center' }}>
-      <div style={{ width: '100%', maxWidth: 680 }}>
+    <div className="flex justify-center">
+      <div className="w-full max-w-170">
         <PageHeader
           title="New de-identification job"
           subtitle="Files are processed in an isolated enclave. Source documents are purged after export."
@@ -173,7 +177,7 @@ export function UploadPage() {
           />
         )}
 
-        <div className="card" style={{ padding: 24 }}>
+        <Card className="p-6">
           <div
             onDragOver={(e) => {
               e.preventDefault();
@@ -182,15 +186,10 @@ export function UploadPage() {
             onDragLeave={() => setDragging(false)}
             onDrop={onDrop}
             onClick={() => inputRef.current?.click()}
-            style={{
-              border: `1.5px dashed ${dragging ? 'var(--color-success)' : '#c9c4b8'}`,
-              borderRadius: 'var(--radius-md)',
-              background: dragging ? '#fcfdfc' : '#fff',
-              padding: '44px 24px',
-              textAlign: 'center',
-              cursor: 'pointer',
-              transition: 'border-color 0.12s ease, background 0.12s ease',
-            }}
+            className={cn(
+              'cursor-pointer rounded-md border-1.5 border-dashed px-6 py-11 text-center transition-colors duration-100',
+              dragging ? 'border-status-success bg-status-success-bg/30' : 'border-border bg-background',
+            )}
           >
             <input
               ref={inputRef}
@@ -200,138 +199,113 @@ export function UploadPage() {
               hidden
               onChange={(e) => pickFiles(e.target.files)}
             />
-            <input
-              ref={folderInputRef}
-              type="file"
-              multiple
-              hidden
-              onChange={(e) => pickFiles(e.target.files)}
-            />
-            <div className="upload-doc-glyph" aria-hidden="true">
-              <span style={{ top: 12 }} />
-              <span style={{ top: 20 }} />
-              <span style={{ top: 28, right: 16 }} />
-            </div>
+            <input ref={folderInputRef} type="file" multiple hidden onChange={(e) => pickFiles(e.target.files)} />
+            <FileText className="text-muted-foreground mx-auto mb-2.5 size-9" strokeWidth={1.25} aria-hidden="true" />
             {files.length > 0 ? (
               <>
-                <div style={{ fontSize: 14, fontWeight: 500 }}>
+                <div className="text-sm font-medium">
                   {files.length} file{files.length === 1 ? '' : 's'} selected
                 </div>
-                <div className="page-subtitle" style={{ marginTop: 4, fontFamily: 'var(--font-mono)' }}>
-                  click or drop to add more
-                </div>
+                <div className="text-muted-foreground font-mono mt-1 text-[13.5px]">click or drop to add more</div>
               </>
             ) : (
               <>
-                <div style={{ fontSize: 14, fontWeight: 500 }}>Drop PDFs here, or browse</div>
-                <div className="page-subtitle" style={{ marginTop: 4, fontFamily: 'var(--font-mono)' }}>
+                <div className="text-sm font-medium">Drop PDFs here, or browse</div>
+                <div className="text-muted-foreground font-mono mt-1 text-[13.5px]">
                   PDF · up to 400 pages · 50 MB each
                 </div>
               </>
             )}
           </div>
 
-          <div style={{ marginTop: 14, display: 'flex', gap: 8 }}>
-            <button
+          <div className="mt-3.5 flex gap-2">
+            <Button
               type="button"
-              className="btn btn-sm"
+              variant="outline"
+              size="sm"
               onClick={(e) => {
                 e.stopPropagation();
                 inputRef.current?.click();
               }}
             >
               Choose files
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="btn btn-sm"
+              variant="outline"
+              size="sm"
               onClick={(e) => {
                 e.stopPropagation();
                 folderInputRef.current?.click();
               }}
             >
               Choose folder
-            </button>
+            </Button>
           </div>
 
           {files.length > 0 && (
-            <ul className="staged-file-list">
+            <ul className="border-border mt-3.5 max-h-55 list-none overflow-y-auto rounded-sm border p-0">
               {files.map((f, i) => (
-                <li key={`${f.name}:${f.size}:${i}`} className="staged-file-row">
-                  <span className="staged-file-name">{f.name}</span>
-                  <span className="mono staged-file-size">{(f.size / 1024).toFixed(0)} KB</span>
-                  <button
+                <li
+                  key={`${f.name}:${f.size}:${i}`}
+                  className="border-border flex items-center gap-2.5 border-b px-3 py-2 text-[13px] last:border-b-0"
+                >
+                  <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{f.name}</span>
+                  <span className="text-muted-foreground font-mono flex-none text-[11.5px]">
+                    {(f.size / 1024).toFixed(0)} KB
+                  </span>
+                  <Button
                     type="button"
-                    className="btn btn-sm btn-ghost"
+                    variant="ghost"
+                    size="icon-sm"
                     aria-label={`Remove ${f.name}`}
                     onClick={() => removeFile(i)}
                   >
-                    ×
-                  </button>
+                    <X className="size-3.5" />
+                  </Button>
                 </li>
               ))}
             </ul>
           )}
 
-          <div style={{ marginTop: 20 }}>
-            <div className="field-label" style={{ marginBottom: 2 }}>
-              Transformation types
-            </div>
-            <p className="page-subtitle" style={{ marginTop: 0, marginBottom: 10 }}>
+          <div className="mt-5">
+            <div className="mb-0.5 text-[13px] font-medium">Transformation types</div>
+            <p className="text-muted-foreground mt-0 mb-2.5 text-[13.5px]">
               Every identifier class defaults to Mask. The default action for each class can be
               changed on the next step, and any single entity can be overridden during review.
             </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+            <div className="grid grid-cols-3 gap-2.5">
               {PRESETS.map((p) => (
-                <div
-                  key={p.mode}
-                  className="card"
-                  style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 13 }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span
-                      style={{ width: 9, height: 9, borderRadius: '50%', background: '#d3cfc4' }}
-                    />
-                    <span style={{ fontSize: 13.5, fontWeight: 600 }}>{p.label}</span>
+                <Card key={p.mode} className="flex flex-col gap-1.5 p-3.25">
+                  <div className="flex items-center gap-2">
+                    <span className="bg-muted-foreground/40 size-2.25 shrink-0 rounded-full" />
+                    <span className="text-[13.5px] font-semibold">{p.label}</span>
                   </div>
-                  <div style={{ fontSize: 12, lineHeight: 1.5, color: '#7a7e84' }}>{p.description}</div>
-                  <div className="mono" style={{ fontSize: 11, color: 'var(--color-text-faint)' }}>
-                    {p.sample}
-                  </div>
+                  <div className="text-muted-foreground text-[12px] leading-relaxed">{p.description}</div>
+                  <div className="text-muted-foreground font-mono text-[11px]">{p.sample}</div>
                   {p.reIdentifiable && (
-                    <span
-                      className="mono"
-                      style={{
-                        fontSize: 10,
-                        letterSpacing: '0.08em',
-                        color: 'var(--color-accent)',
-                        background: '#edf2f8',
-                        borderRadius: 999,
-                        padding: '2px 7px',
-                        alignSelf: 'flex-start',
-                      }}
-                    >
+                    <span className="bg-status-info-bg text-status-info font-mono self-start rounded-full px-1.75 py-0.5 text-[10px] tracking-[0.08em]">
                       RE-IDENTIFIABLE
                     </span>
                   )}
-                </div>
+                </Card>
               ))}
             </div>
           </div>
 
-          <div style={{ marginTop: 24, display: 'flex', gap: 10 }}>
-            <button className="btn btn-primary" disabled={files.length === 0 || submitting} onClick={onSubmit}>
+          <div className="mt-6 flex gap-2.5">
+            <Button disabled={files.length === 0 || submitting} onClick={onSubmit}>
               {submitting
                 ? 'Uploading…'
                 : files.length === 0
                   ? 'Scan for PHI'
                   : `Scan ${files.length} file${files.length === 1 ? '' : 's'}`}
-            </button>
-            <button className="btn" disabled={submitting} onClick={() => navigate(libraryHref)}>
+            </Button>
+            <Button variant="outline" disabled={submitting} onClick={() => navigate(libraryHref)}>
               Cancel
-            </button>
+            </Button>
           </div>
-        </div>
+        </Card>
       </div>
     </div>
   );

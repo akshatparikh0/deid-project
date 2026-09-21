@@ -5,6 +5,10 @@ import type { Folder, FolderCategoryRule, Mode } from '@/api/types';
 import { CategoryDot } from '@/components/CategoryBadge';
 import { PageHeader } from '@/components/Layout';
 import { EmptyState, ErrorBanner, LoadingState } from '@/components/States';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { categoryLabel, MODE_LABELS } from '@/lib/categories';
 import { isPatientFolder, pathTo } from '@/lib/folders';
 import { showToast } from '@/lib/toast';
@@ -56,20 +60,20 @@ export function ConfigRulesPage() {
 
   if (Number.isNaN(folderId) || (folders && !isPatientFolder(folders, folderId))) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center' }}>
-        <div style={{ width: '100%', maxWidth: 680 }}>
+      <div className="flex justify-center">
+        <div className="w-full max-w-170">
           <PageHeader
             title="Config rules"
             subtitle="Choose which identifier classes to detect and how to transform each, before uploading a document."
           />
-          <div className="card">
+          <div className="rounded-xl border bg-card">
             <EmptyState
               title="Choose a patient folder first"
               description="Detection rules are configured per patient folder. Open a patient folder in the document library, then configure its ruleset from there."
               action={
-                <Link to="/queue" className="btn btn-primary">
-                  Go to document library
-                </Link>
+                <Button asChild>
+                  <Link to="/queue">Go to document library</Link>
+                </Button>
               }
             />
           </div>
@@ -87,16 +91,12 @@ export function ConfigRulesPage() {
 
   return (
     <div>
-      <div className="page-header" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 5 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
-          <h1 className="page-title" style={{ margin: 0 }}>
-            Config rules
-          </h1>
-          <span className="mono" style={{ fontSize: 12, color: 'var(--color-text-faint)' }}>
-            {folderName}
-          </span>
+      <div className="mb-6 flex flex-col items-start gap-1.5">
+        <div className="flex items-baseline gap-3">
+          <h1 className="font-serif text-[26px]">Config rules</h1>
+          <span className="text-muted-foreground font-mono text-xs">{folderName}</span>
         </div>
-        <p className="page-subtitle" style={{ margin: 0 }}>
+        <p className="text-muted-foreground text-[13.5px]">
           Choose which of the eighteen Safe Harbor classes to detect in this folder and how to
           transform each by default. Documents uploaded here start from this ruleset; any single
           entity can still be overridden during review.
@@ -106,45 +106,45 @@ export function ConfigRulesPage() {
       {error && <ErrorBanner message={error} />}
       {rowError && <ErrorBanner message={rowError} />}
 
-      <div className="card" style={{ overflowX: 'auto' }}>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Identifier class</th>
-              <th>Default action</th>
-              <th>Placeholder token</th>
-              <th>Enabled</th>
-            </tr>
-          </thead>
-          <tbody>
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Identifier class</TableHead>
+              <TableHead>Default action</TableHead>
+              <TableHead>Placeholder token</TableHead>
+              <TableHead>Enabled</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {rules.map((rule) => (
-              <tr key={rule.category} style={{ opacity: rule.enabled ? 1 : 0.45 }}>
-                <td>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              <TableRow key={rule.category} style={{ opacity: rule.enabled ? 1 : 0.45 }}>
+                <TableCell>
+                  <span className="inline-flex items-center gap-2">
                     <CategoryDot category={rule.category} />
                     {categoryLabel(rule.category)}
                   </span>
-                </td>
-                <td>
-                  <div style={{ display: 'flex', gap: 4 }}>
+                </TableCell>
+                <TableCell>
+                  <div className="flex gap-1">
                     {RULE_MODES.map((mode) => (
-                      <button
+                      <Button
                         key={mode}
                         type="button"
+                        size="sm"
+                        variant={rule.mode === mode ? 'default' : 'outline'}
                         disabled={!rule.enabled}
-                        className={`seg-btn-solid${rule.mode === mode ? ' seg-btn-solid-active' : ''}`}
-                        style={{ padding: '4px 9px', fontSize: 11 }}
+                        className="h-7 px-2 text-[11px]"
                         onClick={() => patchRule(rule.category, { mode })}
                       >
                         {MODE_LABELS[mode]}
-                      </button>
+                      </Button>
                     ))}
                   </div>
-                </td>
-                <td>
-                  <input
-                    className="text-input mono"
-                    style={{ width: 130, color: 'var(--color-success)' }}
+                </TableCell>
+                <TableCell>
+                  <Input
+                    className="text-status-success w-32 font-mono"
                     value={rule.token}
                     disabled={!rule.enabled}
                     onChange={(e) =>
@@ -156,30 +156,26 @@ export function ConfigRulesPage() {
                     }
                     onBlur={(e) => patchRule(rule.category, { token: e.target.value })}
                   />
-                </td>
-                <td>
-                  <button
-                    type="button"
-                    className={`switch${rule.enabled ? ' switch-on' : ''}`}
-                    onClick={() => patchRule(rule.category, { enabled: !rule.enabled })}
+                </TableCell>
+                <TableCell>
+                  <Switch
+                    checked={rule.enabled}
+                    onCheckedChange={() => patchRule(rule.category, { enabled: !rule.enabled })}
                     aria-label={rule.enabled ? 'Disable this class' : 'Enable this class'}
-                  >
-                    <span className="switch-knob" />
-                  </button>
-                </td>
-              </tr>
+                  />
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
 
-      <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 16 }}>
-        <p className="page-subtitle" style={{ margin: 0 }}>
+      <div className="mt-4 flex items-center gap-4">
+        <p className="text-muted-foreground text-[13.5px]">
           {enabledCount} of {rules.length} classes enabled for detection.
         </p>
-        <button
-          className="btn btn-primary"
-          style={{ marginLeft: 'auto' }}
+        <Button
+          className="ml-auto"
           onClick={() => {
             showToast('Ruleset saved.');
             setUploadReady(folderId);
@@ -187,7 +183,7 @@ export function ConfigRulesPage() {
           }}
         >
           Continue to upload →
-        </button>
+        </Button>
       </div>
     </div>
   );

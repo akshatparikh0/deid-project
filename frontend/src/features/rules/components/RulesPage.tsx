@@ -1,12 +1,19 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { Lock } from 'lucide-react';
 import { ApiError, applyRules, getJob, getRules, reopenJob, updateRule } from '@/api/client';
 import type { CategoryRule, Job, Mode } from '@/api/types';
 import { CategoryDot } from '@/components/CategoryBadge';
 import { EmptyState, ErrorBanner, LoadingState } from '@/components/States';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { categoryLabel, MODE_LABELS } from '@/lib/categories';
 import { formatPercent } from '@/lib/format';
 import { getDisplayThreshold, setDisplayThreshold } from '@/lib/threshold';
+import { cn } from '@/lib/utils';
 import { setActiveJob } from '@/stores/activeJob';
 import { showToast } from '@/lib/toast';
 
@@ -96,16 +103,14 @@ export function RulesPage() {
 
   return (
     <div>
-      <div className="page-header" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 5 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
-          <h1 className="page-title" style={{ margin: 0 }}>
-            Detection rules
-          </h1>
-          <span className="mono" style={{ fontSize: 12, color: 'var(--color-text-faint)' }}>
+      <div className="mb-6 flex flex-col items-start gap-1.5">
+        <div className="flex items-baseline gap-3">
+          <h1 className="font-serif text-[26px]">Detection rules</h1>
+          <span className="text-muted-foreground font-mono text-xs">
             {job.code} · {job.filename}
           </span>
         </div>
-        <p className="page-subtitle" style={{ margin: 0 }}>
+        <p className="text-muted-foreground text-[13.5px]">
           The scan found {totalFound} unique identifiers across {classCount} of the eighteen Safe
           Harbor classes. Confirm the default action for each class, then review the document.
         </p>
@@ -115,90 +120,83 @@ export function RulesPage() {
       {rowError && <ErrorBanner message={rowError} />}
 
       {isComplete && (
-        <div className="notice-banner">
-          <span aria-hidden="true">🔒</span>
-          <span style={{ flex: 1 }}>
+        <div className="bg-muted text-muted-foreground border-border mb-4.5 flex items-center gap-3 rounded-md border px-3.5 py-3 text-[13px]">
+          <Lock className="size-4 shrink-0" aria-hidden="true" />
+          <span className="flex-1">
             This document is complete, so detection rules are locked. Reopen it to change them.
           </span>
-          <button className="btn btn-sm" disabled={reopening} onClick={onReopen}>
+          <Button size="sm" variant="outline" disabled={reopening} onClick={onReopen}>
             {reopening ? 'Reopening…' : 'Reopen to edit'}
-          </button>
+          </Button>
         </div>
       )}
 
-      <div
-        className="card"
-        style={{
-          display: 'flex',
-          gap: 18,
-          alignItems: 'center',
-          padding: '16px 18px',
-          marginBottom: 20,
-        }}
-      >
+      <Card className="mb-5 flex-row items-center gap-4.5 px-4.5 py-4">
         <div>
-          <div style={{ fontSize: 13.5, fontWeight: 600 }}>Confidence threshold</div>
-          <div className="page-subtitle" style={{ marginTop: 2 }}>
+          <div className="text-[13.5px] font-semibold">Confidence threshold</div>
+          <div className="text-muted-foreground mt-0.5 text-[13.5px]">
             Below this, entities are flagged for review instead of auto-applied.
           </div>
         </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 4, flexShrink: 0 }}>
+        <div className="ml-auto flex shrink-0 gap-1">
           {THRESHOLD_STEPS.map((step) => (
-            <button
+            <Button
               key={step}
               type="button"
-              className={`chip${threshold === step ? ' chip-active' : ''}`}
+              size="sm"
+              variant={threshold === step ? 'default' : 'outline'}
+              className="rounded-full px-3 text-xs"
               onClick={() => onThresholdChange(step)}
             >
               {formatPercent(step)}
-            </button>
+            </Button>
           ))}
         </div>
-      </div>
+      </Card>
 
-      <div className="card" style={{ overflowX: 'auto' }}>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Identifier class</th>
-              <th>Found</th>
-              <th>Default action</th>
-              <th>Placeholder token</th>
-              <th>Enabled</th>
-            </tr>
-          </thead>
-          <tbody>
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Identifier class</TableHead>
+              <TableHead>Found</TableHead>
+              <TableHead>Default action</TableHead>
+              <TableHead>Placeholder token</TableHead>
+              <TableHead>Enabled</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {rules.map((rule) => (
-              <tr key={rule.category} style={{ opacity: rule.enabled ? (rule.found === 0 ? 0.55 : 1) : 0.45 }}>
-                <td>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              <TableRow key={rule.category} style={{ opacity: rule.enabled ? (rule.found === 0 ? 0.55 : 1) : 0.45 }}>
+                <TableCell>
+                  <span className="inline-flex items-center gap-2">
                     <CategoryDot category={rule.category} />
                     {categoryLabel(rule.category)}
                   </span>
-                </td>
-                <td className="mono" style={{ color: rule.found === 0 ? 'var(--color-text-faint)' : undefined }}>
+                </TableCell>
+                <TableCell className={cn('font-mono', rule.found === 0 && 'text-muted-foreground')}>
                   {rule.found || '—'}
-                </td>
-                <td>
-                  <div style={{ display: 'flex', gap: 4 }}>
+                </TableCell>
+                <TableCell>
+                  <div className="flex gap-1">
                     {RULE_MODES.map((mode) => (
-                      <button
+                      <Button
                         key={mode}
                         type="button"
+                        size="sm"
+                        variant={rule.mode === mode ? 'default' : 'outline'}
                         disabled={!rule.enabled || isComplete}
-                        className={`seg-btn-solid${rule.mode === mode ? ' seg-btn-solid-active' : ''}`}
-                        style={{ padding: '4px 9px', fontSize: 11 }}
+                        className="h-7 px-2 text-[11px]"
                         onClick={() => patchRule(rule.category, { mode })}
                       >
                         {MODE_LABELS[mode]}
-                      </button>
+                      </Button>
                     ))}
                   </div>
-                </td>
-                <td>
-                  <input
-                    className="text-input mono"
-                    style={{ width: 130, color: 'var(--color-success)' }}
+                </TableCell>
+                <TableCell>
+                  <Input
+                    className="text-status-success w-32 font-mono"
                     value={rule.token}
                     disabled={!rule.enabled || isComplete}
                     onChange={(e) =>
@@ -210,33 +208,30 @@ export function RulesPage() {
                     }
                     onBlur={(e) => patchRule(rule.category, { token: e.target.value })}
                   />
-                </td>
-                <td>
-                  <button
-                    type="button"
-                    className={`switch${rule.enabled ? ' switch-on' : ''}`}
+                </TableCell>
+                <TableCell>
+                  <Switch
+                    checked={rule.enabled}
                     disabled={isComplete}
-                    onClick={() => patchRule(rule.category, { enabled: !rule.enabled })}
+                    onCheckedChange={() => patchRule(rule.category, { enabled: !rule.enabled })}
                     aria-label={rule.enabled ? 'Disable this class' : 'Enable this class'}
-                  >
-                    <span className="switch-knob" />
-                  </button>
-                </td>
-              </tr>
+                  />
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
 
       {!isComplete && (
-        <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 16 }}>
-          <p className="page-subtitle" style={{ margin: 0 }}>
+        <div className="mt-4 flex items-center gap-4">
+          <p className="text-muted-foreground text-[13.5px]">
             {rules.filter((r) => r.found > 0).length} classes present ·{' '}
             {rules.reduce((n, r) => n + r.found, 0)} entities will be transformed on apply.
           </p>
-          <button className="btn btn-primary" disabled={applying} onClick={onApply} style={{ marginLeft: 'auto' }}>
+          <Button disabled={applying} onClick={onApply} className="ml-auto">
             {applying ? 'Applying…' : 'Apply and review →'}
-          </button>
+          </Button>
         </div>
       )}
     </div>

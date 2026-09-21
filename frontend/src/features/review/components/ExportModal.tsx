@@ -2,6 +2,16 @@ import { useState } from 'react';
 import { ApiError, exportJob, resolveApiUrl } from '@/api/client';
 import type { ExportFile, ExportFormat } from '@/api/types';
 import { ErrorBanner } from '@/components/States';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { showToast } from '@/lib/toast';
 
 const FORMATS: { value: ExportFormat; label: string; description: string }[] = [
@@ -42,41 +52,32 @@ export function ExportModal({ jobId, onClose }: { jobId: number; onClose: () => 
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
-        <h2 className="modal-title">Export job</h2>
-        <p className="page-subtitle">
-          Generate a de-identified PDF, the audit CSV, and/or the entity manifest JSON.
-        </p>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-105">
+        <DialogHeader>
+          <DialogTitle className="font-serif text-[19px]">Export job</DialogTitle>
+          <DialogDescription>
+            Generate a de-identified PDF, the audit CSV, and/or the entity manifest JSON.
+          </DialogDescription>
+        </DialogHeader>
 
         {error && <ErrorBanner message={error} />}
 
         {!files && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14 }}>
+          <div className="flex flex-col gap-2.5">
             {FORMATS.map((f) => (
               <label
                 key={f.value}
-                style={{
-                  display: 'flex',
-                  gap: 10,
-                  alignItems: 'flex-start',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 'var(--radius-sm)',
-                  padding: '10px 12px',
-                  cursor: 'pointer',
-                }}
+                className="border-border flex cursor-pointer items-start gap-2.5 rounded-sm border px-3 py-2.5"
               >
-                <input
-                  type="checkbox"
+                <Checkbox
+                  className="mt-0.5"
                   checked={selected.has(f.value)}
-                  onChange={() => toggle(f.value)}
-                  style={{ marginTop: 2 }}
+                  onCheckedChange={() => toggle(f.value)}
                 />
                 <span>
-                  <span style={{ fontWeight: 600, display: 'block' }}>{f.label}</span>
-                  <span className="page-subtitle" style={{ margin: 0 }}>
-                    {f.description}
-                  </span>
+                  <span className="block font-semibold">{f.label}</span>
+                  <span className="text-muted-foreground text-[13.5px]">{f.description}</span>
                 </span>
               </label>
             ))}
@@ -84,36 +85,31 @@ export function ExportModal({ jobId, onClose }: { jobId: number; onClose: () => 
         )}
 
         {files && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14 }}>
+          <div className="flex flex-col gap-2">
             {files.map((file) => (
-              <a
-                key={file.format}
-                href={resolveApiUrl(file.url)}
-                target="_blank"
-                rel="noreferrer"
-                className="btn"
-                style={{ justifyContent: 'space-between' }}
-              >
-                <span>
-                  Download {file.filename} <span className="page-subtitle">({file.format})</span>
-                </span>
-                <span aria-hidden="true">&#8595;</span>
-              </a>
+              <Button key={file.format} variant="outline" className="h-auto justify-between" asChild>
+                <a href={resolveApiUrl(file.url)} target="_blank" rel="noreferrer">
+                  <span>
+                    Download {file.filename} <span className="text-muted-foreground">({file.format})</span>
+                  </span>
+                  <span aria-hidden="true">&#8595;</span>
+                </a>
+              </Button>
             ))}
           </div>
         )}
 
-        <div className="modal-actions">
-          <button className="btn" onClick={onClose}>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
             {files ? 'Close' : 'Cancel'}
-          </button>
+          </Button>
           {!files && (
-            <button className="btn btn-primary" onClick={onGenerate} disabled={submitting}>
+            <Button onClick={onGenerate} disabled={submitting}>
               {submitting ? 'Generating…' : 'Generate export'}
-            </button>
+            </Button>
           )}
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
