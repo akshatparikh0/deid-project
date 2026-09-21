@@ -1,4 +1,4 @@
-import type { JobStatus } from '../api/types';
+import type { JobStatus } from '@/api/types';
 
 /** Where clicking into a job should land, based on how far it's progressed.
  * `batchId` is the job's UploadBatch id (Job.batch) — while a job is still

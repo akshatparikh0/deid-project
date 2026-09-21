@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ApiError, getFolderRules, listFolders, updateFolderRule } from '../api/client';
-import type { Folder, FolderCategoryRule, Mode } from '../api/types';
-import { CategoryDot } from '../components/CategoryBadge';
-import { PageHeader } from '../components/Layout';
-import { EmptyState, ErrorBanner, LoadingState } from '../components/States';
-import { setActiveFolder, setUploadReady } from '../lib/activeJob';
-import { categoryLabel, MODE_LABELS } from '../lib/categories';
-import { isPatientFolder, pathTo } from '../lib/folders';
-import { showToast } from '../lib/toast';
+import { ApiError, getFolderRules, listFolders, updateFolderRule } from '@/api/client';
+import type { Folder, FolderCategoryRule, Mode } from '@/api/types';
+import { CategoryDot } from '@/components/CategoryBadge';
+import { PageHeader } from '@/components/Layout';
+import { EmptyState, ErrorBanner, LoadingState } from '@/components/States';
+import { categoryLabel, MODE_LABELS } from '@/lib/categories';
+import { isPatientFolder, pathTo } from '@/lib/folders';
+import { showToast } from '@/lib/toast';
+import { setActiveFolder, setUploadReady } from '@/stores/activeJob';
 
 const RULE_MODES: Mode[] = ['redact', 'mask', 'pseudo'];
 

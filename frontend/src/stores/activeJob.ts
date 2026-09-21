@@ -1,4 +1,4 @@
-import type { Folder, Job, JobStatus } from '../api/types';
+import type { Folder, Job, JobStatus } from '@/api/types';
 
 interface ActiveJobSnapshot {
   id: number;

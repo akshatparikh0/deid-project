@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { fetchAuthenticatedBlob } from '../api/client';
-import type { Category, DocumentPage, Entity } from '../api/types';
-import { categoryColor } from '../lib/categories';
+import { fetchAuthenticatedBlob } from '@/api/client';
+import type { Category, DocumentPage, Entity } from '@/api/types';
+import { categoryColor } from '@/lib/categories';
 
 function hexToRgba(hex: string, alpha: number): string {
   const m = hex.replace('#', '');

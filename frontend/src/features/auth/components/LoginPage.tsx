@@ -2,9 +2,9 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useSyncExternalStore } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { ApiError } from '../api/client';
-import { ErrorBanner } from '../components/States';
-import { getAuthStatusSnapshot, login, subscribeAuth } from '../lib/auth';
+import { ApiError } from '@/api/client';
+import { ErrorBanner } from '@/components/States';
+import { getAuthStatusSnapshot, login, subscribeAuth } from '@/lib/auth';
 
 export function LoginPage() {
   const status = useSyncExternalStore(subscribeAuth, getAuthStatusSnapshot);

@@ -1,18 +1,18 @@
 import type { ReactNode } from 'react';
 import { useEffect, useSyncExternalStore } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { Layout } from './components/Layout';
-import { LoadingState } from './components/States';
-import { bootstrapAuth, getAuthStatusSnapshot, subscribeAuth } from './lib/auth';
-import { AuditPage } from './pages/AuditPage';
-import { ConfigRulesPage } from './pages/ConfigRulesPage';
-import { LoginPage } from './pages/LoginPage';
-import { QueuePage } from './pages/QueuePage';
-import { RegisterPage } from './pages/RegisterPage';
-import { ReviewPage } from './pages/ReviewPage';
-import { RulesPage } from './pages/RulesPage';
-import { StatusPage } from './pages/StatusPage';
-import { UploadPage } from './pages/UploadPage';
+import { Layout } from '@/components/Layout';
+import { LoadingState } from '@/components/States';
+import { AuditPage } from '@/features/audit/components/AuditPage';
+import { LoginPage } from '@/features/auth/components/LoginPage';
+import { RegisterPage } from '@/features/auth/components/RegisterPage';
+import { QueuePage } from '@/features/queue/components/QueuePage';
+import { ReviewPage } from '@/features/review/components/ReviewPage';
+import { ConfigRulesPage } from '@/features/rules/components/ConfigRulesPage';
+import { RulesPage } from '@/features/rules/components/RulesPage';
+import { StatusPage } from '@/features/upload/components/StatusPage';
+import { UploadPage } from '@/features/upload/components/UploadPage';
+import { bootstrapAuth, getAuthStatusSnapshot, subscribeAuth } from '@/lib/auth';
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const status = useSyncExternalStore(subscribeAuth, getAuthStatusSnapshot);

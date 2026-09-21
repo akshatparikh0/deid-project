@@ -9,18 +9,18 @@ import {
   listJobs,
   updateFolder,
   updateJob,
-} from '../api/client';
-import type { Folder, Job } from '../api/types';
-import { ConfirmModal } from '../components/ConfirmModal';
-import { PageHeader } from '../components/Layout';
-import { NamePromptModal } from '../components/NamePromptModal';
-import { StatusBadge } from '../components/StatusBadge';
-import { EmptyState, ErrorBanner, LoadingState } from '../components/States';
-import { setActiveFolder, setQueueCount } from '../lib/activeJob';
-import { folderLevel, pathTo } from '../lib/folders';
-import { formatRelative } from '../lib/format';
-import { routeForJobStatus } from '../lib/jobRoute';
-import { showToast } from '../lib/toast';
+} from '@/api/client';
+import type { Folder, Job } from '@/api/types';
+import { ConfirmModal } from '@/components/ConfirmModal';
+import { PageHeader } from '@/components/Layout';
+import { StatusBadge } from '@/components/StatusBadge';
+import { EmptyState, ErrorBanner, LoadingState } from '@/components/States';
+import { folderLevel, pathTo } from '@/lib/folders';
+import { formatRelative } from '@/lib/format';
+import { routeForJobStatus } from '@/lib/jobRoute';
+import { showToast } from '@/lib/toast';
+import { setActiveFolder, setQueueCount } from '@/stores/activeJob';
+import { NamePromptModal } from './NamePromptModal';
 
 function routeForJob(job: Job): string | null {
   return routeForJobStatus(job.id, job.status, job.batch);

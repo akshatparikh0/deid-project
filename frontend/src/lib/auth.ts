@@ -1,5 +1,5 @@
-import { getAuthToken, getMe, login as apiLogin, logout as apiLogout, register as apiRegister, setAuthToken } from '../api/client';
-import type { AuthUser } from '../api/types';
+import { getAuthToken, getMe, login as apiLogin, logout as apiLogout, register as apiRegister, setAuthToken } from '@/api/client';
+import type { AuthUser } from '@/api/types';
 
 export type AuthStatus = 'loading' | 'authenticated' | 'guest';
 

@@ -8,10 +8,10 @@ import {
   getQueueCountSnapshot,
   getUploadReadySnapshot,
   subscribeActiveJob,
-} from '../lib/activeJob';
-import { getAuthUserSnapshot, logout, subscribeAuth } from '../lib/auth';
-import { routeForJobStatus } from '../lib/jobRoute';
-import { Toast } from './Toast';
+} from '@/stores/activeJob';
+import { getAuthUserSnapshot, logout, subscribeAuth } from '@/lib/auth';
+import { routeForJobStatus } from '@/lib/jobRoute';
+import { Toast } from '@/components/Toast';
 
 export function Layout() {
   const location = useLocation();

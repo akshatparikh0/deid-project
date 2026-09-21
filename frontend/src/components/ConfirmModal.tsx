@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { ApiError } from '../api/client';
-import { ErrorBanner } from './States';
+import { ApiError } from '@/api/client';
+import { ErrorBanner } from '@/components/States';
 
 export function ConfirmModal({
   title,

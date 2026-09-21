@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ApiError, exportJob, getAudit, getJob, reopenJob, resolveApiUrl } from '../api/client';
-import type { AuditRow, Job } from '../api/types';
-import { CategoryBadge } from '../components/CategoryBadge';
-import { ModePill } from '../components/ModePill';
-import { StatusBadge } from '../components/StatusBadge';
-import { EmptyState, ErrorBanner, LoadingState } from '../components/States';
-import { setActiveJob } from '../lib/activeJob';
-import { formatDateTime, formatPercent } from '../lib/format';
+import { ApiError, exportJob, getAudit, getJob, reopenJob, resolveApiUrl } from '@/api/client';
+import type { AuditRow, Job } from '@/api/types';
+import { CategoryBadge } from '@/components/CategoryBadge';
+import { StatusBadge } from '@/components/StatusBadge';
+import { EmptyState, ErrorBanner, LoadingState } from '@/components/States';
+import { formatDateTime, formatPercent } from '@/lib/format';
+import { setActiveJob } from '@/stores/activeJob';
+import { ModePill } from './ModePill';
 
 export function AuditPage() {
   const { id } = useParams<{ id: string }>();

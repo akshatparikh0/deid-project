@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import type { DragEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ApiError, createUploadBatch, listFolders } from '../api/client';
-import type { Mode } from '../api/types';
-import { PageHeader } from '../components/Layout';
-import { EmptyState, ErrorBanner, LoadingState } from '../components/States';
-import { setActiveBatch } from '../lib/activeJob';
-import { isPatientFolder } from '../lib/folders';
-import { showToast } from '../lib/toast';
+import { ApiError, createUploadBatch, listFolders } from '@/api/client';
+import type { Mode } from '@/api/types';
+import { PageHeader } from '@/components/Layout';
+import { EmptyState, ErrorBanner, LoadingState } from '@/components/States';
+import { isPatientFolder } from '@/lib/folders';
+import { showToast } from '@/lib/toast';
+import { setActiveBatch } from '@/stores/activeJob';
 
 const PRESETS: {
   mode: Mode;

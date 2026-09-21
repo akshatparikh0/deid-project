@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ApiError, getUploadBatch, retryJob } from '../api/client';
-import type { Job, JobStage, StageName, UploadBatch } from '../api/types';
-import { PageHeader } from '../components/Layout';
-import { ErrorBanner, LoadingState } from '../components/States';
-import { setActiveBatch } from '../lib/activeJob';
-import { formatDuration } from '../lib/format';
+import { ApiError, getUploadBatch, retryJob } from '@/api/client';
+import type { Job, JobStage, StageName, UploadBatch } from '@/api/types';
+import { PageHeader } from '@/components/Layout';
+import { ErrorBanner, LoadingState } from '@/components/States';
+import { formatDuration } from '@/lib/format';
+import { setActiveBatch } from '@/stores/activeJob';
 
 const STAGE_LABELS: Record<StageName, string> = {
   ingest: 'Ingest',

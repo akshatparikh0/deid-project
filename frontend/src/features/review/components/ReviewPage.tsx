@@ -9,16 +9,16 @@ import {
   getRules,
   reopenJob,
   updateEntity,
-} from '../api/client';
-import type { Category, DocumentPayload, Entity, Job, Mode } from '../api/types';
-import { PageImagePane } from '../components/PageImagePane';
-import { EntityInspector } from '../components/EntityInspector';
-import { ExportModal } from '../components/ExportModal';
-import { StatusBadge } from '../components/StatusBadge';
-import { ErrorBanner, LoadingState } from '../components/States';
-import { setActiveJob } from '../lib/activeJob';
-import { getDisplayThreshold } from '../lib/threshold';
-import { showToast } from '../lib/toast';
+} from '@/api/client';
+import type { Category, DocumentPayload, Entity, Job, Mode } from '@/api/types';
+import { StatusBadge } from '@/components/StatusBadge';
+import { ErrorBanner, LoadingState } from '@/components/States';
+import { getDisplayThreshold } from '@/lib/threshold';
+import { showToast } from '@/lib/toast';
+import { setActiveJob } from '@/stores/activeJob';
+import { EntityInspector } from './EntityInspector';
+import { ExportModal } from './ExportModal';
+import { PageImagePane } from './PageImagePane';
 
 type PaneView = 'both' | 'original' | 'deidentified';
 

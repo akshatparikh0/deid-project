@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import type { Entity, Mode } from '../api/types';
-import { categoryCfr, categoryLabel, MODE_LABELS, MODE_NOTES, MODES } from '../lib/categories';
-import { CategoryDot } from './CategoryBadge';
+import type { Entity, Mode } from '@/api/types';
+import { CategoryDot } from '@/components/CategoryBadge';
+import { categoryCfr, categoryLabel, MODE_LABELS, MODE_NOTES, MODES } from '@/lib/categories';
 
 const FILTERS: (Mode | 'all')[] = ['all', 'redact', 'mask', 'pseudo', 'keep'];
 

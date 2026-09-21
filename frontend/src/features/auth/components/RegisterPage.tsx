@@ -2,9 +2,9 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useSyncExternalStore } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
-import { ApiError } from '../api/client';
-import { ErrorBanner } from '../components/States';
-import { getAuthStatusSnapshot, register, subscribeAuth } from '../lib/auth';
+import { ApiError } from '@/api/client';
+import { ErrorBanner } from '@/components/States';
+import { getAuthStatusSnapshot, register, subscribeAuth } from '@/lib/auth';
 
 export function RegisterPage() {
   const status = useSyncExternalStore(subscribeAuth, getAuthStatusSnapshot);

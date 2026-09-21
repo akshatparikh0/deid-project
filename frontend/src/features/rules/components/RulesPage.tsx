@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ApiError, applyRules, getJob, getRules, reopenJob, updateRule } from '../api/client';
-import type { CategoryRule, Job, Mode } from '../api/types';
-import { CategoryDot } from '../components/CategoryBadge';
-import { EmptyState, ErrorBanner, LoadingState } from '../components/States';
-import { setActiveJob } from '../lib/activeJob';
-import { categoryLabel, MODE_LABELS } from '../lib/categories';
-import { formatPercent } from '../lib/format';
-import { getDisplayThreshold, setDisplayThreshold } from '../lib/threshold';
-import { showToast } from '../lib/toast';
+import { ApiError, applyRules, getJob, getRules, reopenJob, updateRule } from '@/api/client';
+import type { CategoryRule, Job, Mode } from '@/api/types';
+import { CategoryDot } from '@/components/CategoryBadge';
+import { EmptyState, ErrorBanner, LoadingState } from '@/components/States';
+import { categoryLabel, MODE_LABELS } from '@/lib/categories';
+import { formatPercent } from '@/lib/format';
+import { getDisplayThreshold, setDisplayThreshold } from '@/lib/threshold';
+import { setActiveJob } from '@/stores/activeJob';
+import { showToast } from '@/lib/toast';
 
 const THRESHOLD_STEPS = [0.7, 0.8, 0.85, 0.9];
 const RULE_MODES: Mode[] = ['redact', 'mask', 'pseudo'];

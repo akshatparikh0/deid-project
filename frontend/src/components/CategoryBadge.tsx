@@ -1,5 +1,5 @@
-import type { Category } from '../api/types';
-import { categoryColor, categoryLabel } from '../lib/categories';
+import type { Category } from '@/api/types';
+import { categoryColor, categoryLabel } from '@/lib/categories';
 
 export function CategoryDot({ category }: { category: Category }) {
   return <span className="badge-dot" style={{ background: categoryColor(category) }} />;
