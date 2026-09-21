@@ -33,10 +33,12 @@ export function ReviewPage() {
   const navigate = useNavigate();
   const location = useLocation();
   // Where "Close" goes back to depends on how this document was opened —
-  // set by the caller's navigate(..., { state: { from } }) — not just
+  // set by the caller's navigate(..., { state: { from, folder } }) — not just
   // whether the job has a batch, so opening the same job from the document
-  // library always returns there even if it came from a batch upload.
-  const openedFrom = (location.state as { from?: 'status' | 'queue' } | null)?.from;
+  // library always returns there (into the same folder) even if it came
+  // from a batch upload.
+  const openedState = location.state as { from?: 'status' | 'queue'; folder?: number | null } | null;
+  const openedFrom = openedState?.from;
 
   const [job, setJob] = useState<Job | null>(null);
   const [doc, setDoc] = useState<DocumentPayload | null>(null);
@@ -254,7 +256,12 @@ export function ReviewPage() {
                 : 'Close file and return to document library'
             }
             onClick={() => {
-              const dest = openedFrom === 'status' && job.batch != null ? `/uploads/${job.batch}/status` : '/queue';
+              const dest =
+                openedFrom === 'status' && job.batch != null
+                  ? `/uploads/${job.batch}/status`
+                  : openedState?.folder != null
+                    ? `/queue?folder=${openedState.folder}`
+                    : '/queue';
               setActiveJob(null);
               navigate(dest);
             }}

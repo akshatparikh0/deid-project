@@ -328,7 +328,7 @@ export function QueuePage() {
                   <TableRow
                     key={job.id}
                     className={dest ? 'cursor-pointer' : undefined}
-                    onClick={dest ? () => navigate(dest, { state: { from: 'queue' } }) : undefined}
+                    onClick={dest ? () => navigate(dest, { state: { from: 'queue', folder: currentId } }) : undefined}
                   >
                     <TableCell className="whitespace-normal">
                       <div className="font-medium">{job.filename}</div>
