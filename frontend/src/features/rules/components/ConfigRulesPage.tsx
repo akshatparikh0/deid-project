@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { ArrowLeft } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ApiError, getFolderRules, listFolders, updateFolderRule } from '@/api/client';
 import type { Folder, FolderCategoryRule, Mode } from '@/api/types';
@@ -12,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { categoryLabel, MODE_LABELS } from '@/lib/categories';
 import { isPatientFolder, pathTo } from '@/lib/folders';
 import { showToast } from '@/lib/toast';
-import { setActiveFolder, setUploadReady } from '@/stores/activeJob';
+import { setActiveFolder } from '@/stores/activeJob';
 
 const RULE_MODES: Mode[] = ['redact', 'mask', 'pseudo'];
 
@@ -44,6 +45,13 @@ export function ConfigRulesPage() {
   }
 
   useEffect(load, [folderId]);
+
+  function onBack() {
+    // Every edit already persists immediately via updateFolderRule (see
+    // patchRule below), so there's nothing left to flush here.
+    showToast('Ruleset saved.');
+    navigate(`/queue?folder=${folderId}`);
+  }
 
   function patchRule(category: FolderCategoryRule['category'], patch: Partial<FolderCategoryRule>) {
     if (!rules) return;
@@ -91,6 +99,11 @@ export function ConfigRulesPage() {
 
   return (
     <div>
+      <Button variant="ghost" size="sm" className="-ml-2 mb-3 gap-1.5 text-muted-foreground" onClick={onBack}>
+        <ArrowLeft className="size-3.5" />
+        Back
+      </Button>
+
       <div className="mb-6 flex flex-col items-start gap-1.5">
         <div className="flex items-baseline gap-3">
           <h1 className="font-serif text-[26px]">Config rules</h1>
@@ -174,16 +187,6 @@ export function ConfigRulesPage() {
         <p className="text-muted-foreground text-[13.5px]">
           {enabledCount} of {rules.length} classes enabled for detection.
         </p>
-        <Button
-          className="ml-auto"
-          onClick={() => {
-            showToast('Ruleset saved.');
-            setUploadReady(folderId);
-            navigate(`/upload?folder=${folderId}`);
-          }}
-        >
-          Continue to upload →
-        </Button>
       </div>
     </div>
   );

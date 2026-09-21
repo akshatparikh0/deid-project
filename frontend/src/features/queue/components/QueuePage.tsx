@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Folder as FolderIcon } from 'lucide-react';
+import { Folder as FolderIcon, Settings } from 'lucide-react';
 import {
   ApiError,
   createFolder,
@@ -24,7 +24,7 @@ import { folderLevel, pathTo } from '@/lib/folders';
 import { formatRelative } from '@/lib/format';
 import { routeForJobStatus } from '@/lib/jobRoute';
 import { showToast } from '@/lib/toast';
-import { setActiveFolder, setQueueCount } from '@/stores/activeJob';
+import { setActiveFolder, setQueueCount, setUploadReady } from '@/stores/activeJob';
 import { NamePromptModal } from './NamePromptModal';
 
 function routeForJob(job: Job): string | null {
@@ -113,6 +113,14 @@ export function QueuePage() {
   const canCreateFolder = !isPatientFolder;
   const canConfigureRules = isPatientFolder;
   const rulesHref = currentId ? `/folders/${currentId}/rules` : '/queue';
+  const uploadHref = currentId ? `/upload?folder=${currentId}` : '/queue';
+
+  function onAddDocument() {
+    // Rules are configured separately via the gear button now, so "Add
+    // document" jumps straight to upload; mark the folder upload-ready so
+    // the sidebar "Upload File" link lights up to match.
+    if (currentId) setUploadReady(currentId);
+  }
 
   async function onCreateFolder(name: string) {
     await createFolder({ name, parent: currentId });
@@ -164,8 +172,16 @@ export function QueuePage() {
               </Button>
             )}
             {canConfigureRules && (
-              <Button asChild>
-                <Link to={rulesHref}>Add document</Link>
+              <Button variant="outline" asChild>
+                <Link to={rulesHref}>
+                  <Settings className="size-4" />
+                  Configuration
+                </Link>
+              </Button>
+            )}
+            {canConfigureRules && (
+              <Button asChild onClick={onAddDocument}>
+                <Link to={uploadHref}>Add document</Link>
               </Button>
             )}
           </>
@@ -210,15 +226,15 @@ export function QueuePage() {
             title={isPatientFolder ? 'No documents yet' : `No ${trail.length ? 'patients' : 'projects'} yet`}
             description={
               isPatientFolder
-                ? 'Configure the detection ruleset, then add a document to get started.'
+                ? 'Add a document to get started, or use the gear icon above to configure the detection ruleset first.'
                 : trail.length
                   ? 'Create a patient folder to start uploading documents.'
                   : 'Create a project to start organizing documents by patient.'
             }
             action={
               canConfigureRules ? (
-                <Button asChild>
-                  <Link to={rulesHref}>Add document</Link>
+                <Button asChild onClick={onAddDocument}>
+                  <Link to={uploadHref}>Add document</Link>
                 </Button>
               ) : (
                 <Button onClick={() => setModal({ kind: 'newFolder' })}>New {kindLabel}</Button>

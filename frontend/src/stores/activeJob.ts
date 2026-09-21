@@ -16,9 +16,10 @@ interface ActiveFolderSnapshot {
 let activeJob: ActiveJobSnapshot | null = null;
 let activeFolder: ActiveFolderSnapshot | null = null;
 let queueCount: number | null = null;
-/** Set only once the user reaches the end of config rules and chooses to
- * continue — gates the "Upload file" sidebar link so it can't be reached by
- * any route other than document library -> config rules -> continue. */
+/** Set once the user commits to uploading into a patient folder — either by
+ * clicking "Add document" in the document library, or by continuing from
+ * that folder's config rules page. Gates the "Upload file" sidebar link so
+ * it only lights up once a folder has actually been chosen for upload. */
 let uploadReadyFolderId: number | null = null;
 /** The most recently created/opened UploadBatch — gates the "Status" sidebar
  * link the same way uploadReadyFolderId gates "Upload file". Set once a
