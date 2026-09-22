@@ -40,8 +40,7 @@ class DlpFixtureIngestTests(TestCase):
         self.assertEqual(self.job.entities.filter(category="ssn").count(), 30)
 
     def test_all_30_credit_card_numbers_found(self):
-        # Tagged "other" per product decision (no dedicated ccn category).
-        self.assertEqual(self.job.entities.filter(category="other").count(), 30)
+        self.assertEqual(self.job.entities.filter(category="payment_card").count(), 30)
 
     def test_name_recall_at_least_90_percent(self):
         expected_names = {
@@ -54,7 +53,7 @@ class DlpFixtureIngestTests(TestCase):
             "Thomas Santos", "Mireille Townsend", "Lillian Venson", "Gail Watson",
             "Johnson White", "Rebecca Zwick",
         }
-        found_names = set(self.job.entities.filter(category="name").values_list("value", flat=True))
+        found_names = set(self.job.entities.filter(category="person_name").values_list("value", flat=True))
         recall = len(expected_names & found_names) / len(expected_names)
         self.assertGreaterEqual(recall, 0.9, f"only found {found_names & expected_names}")
 
@@ -74,17 +73,21 @@ class ConsultNoteIngestTests(TestCase):
         self.assertEqual(self.job.status, "in_review")
 
     def test_high_precision_categories_fully_recalled(self):
-        for category in ("patient_name", "physician_name", "facility", "mrn"):
+        for category in ("patient_name", "physician_name", "facility_name", "mrn"):
             found = set(self.job.entities.filter(category=category).values_list("value", flat=True))
             self.assertEqual(found, set(self.expected[category]), category)
 
     def test_dates_fully_recalled(self):
-        found = set(self.job.entities.filter(category="date").values_list("value", flat=True))
-        self.assertEqual(found, set(self.expected["date"]))
+        # DOB gets its own sub-category (date_of_birth) so the per-entity-type
+        # policy can mask it differently than an undated-context date.
+        found_dob = set(self.job.entities.filter(category="date_of_birth").values_list("value", flat=True))
+        found_other = set(self.job.entities.filter(category="other_date").values_list("value", flat=True))
+        self.assertEqual(found_dob, set(self.expected["date_of_birth"]))
+        self.assertEqual(found_other, set(self.expected["other_date"]))
 
     def test_family_history_names_fully_recalled(self):
-        found = set(self.job.entities.filter(category="name").values_list("value", flat=True))
-        self.assertEqual(found, set(self.expected["name"]))
+        found = set(self.job.entities.filter(category="person_name").values_list("value", flat=True))
+        self.assertEqual(found, set(self.expected["person_name"]))
 
     def test_no_bare_year_or_age_false_positives(self):
         # "2014" (surgery year, Safe-Harbor-permitted) and "40"/"52"/"15"
@@ -109,7 +112,7 @@ class RedactedSampleNegativeControlTests(TestCase):
     def test_no_ssn_email_phone_or_other_structured_entities(self):
         job = _run("redacted_consult_note.pdf")
         self.assertEqual(job.status, "in_review")
-        structured = job.entities.filter(category__in=["ssn", "email", "phone", "ip", "other"])
+        structured = job.entities.filter(category__in=["ssn", "email", "phone", "ip_address", "payment_card"])
         self.assertEqual(structured.count(), 0)
 
     @unittest.skipUnless(shutil.which("tesseract"), "tesseract binary not installed")
@@ -125,4 +128,4 @@ class RedactedSampleNegativeControlTests(TestCase):
         all_text = " ".join(job.blocks.values_list("text", flat=True))
         self.assertIn("allergic rhinitis", all_text)
         self.assertIn("Review of Systems", all_text)
-        self.assertTrue(job.blocks.filter(source="ocr").exists())
+        self.assertTrue(job.blocks.filter(source="tesseract").exists())

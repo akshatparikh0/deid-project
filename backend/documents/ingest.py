@@ -6,22 +6,25 @@ Review screen can draw redaction/highlight boxes on the real rendered page
 image), one Page row per page image, and seed one CategoryRule per
 canonical Safe Harbor category.
 
-Runs on a background thread (see tasks.py), advancing job.status through the
+Runs as a Celery task (see tasks.py), advancing job.status through the
 parse/detect/transform/finalize stages (categories.STAGE_ORDER) and recording
 each one's start/finish on a JobStage row so the Status page can poll live
 per-stage progress and timing for many jobs at once.
 """
 import logging
 
+from django.conf import settings
 from django.core.files.base import ContentFile
 from django.db import transaction
 from django.utils import timezone
 
+from .ai_detection import DetectorConfigError, build_detectors
 from .categories import CATEGORY_META, CATEGORY_ORDER, STAGE_ORDER
-from .detection import detect_spans
+from .detection import detect_spans, merge_spans
 from .extraction import ExtractionError, extract_blocks
 from .models import CategoryRule, DocumentBlock, Entity, JobStage, Page
 from .surrogates import make_surrogate
+from .validation import ValidationError, validate_pdf
 
 logger = logging.getLogger(__name__)
 
@@ -32,10 +35,39 @@ def _line_group_boxes(words, start, end):
     """Given a block's per-word position metadata and a detected span's
     character range, returns one box per visual line the span touches — a
     span wrapped across two lines gets two boxes rather than one box
-    spanning (and over-covering) the gap between them."""
+    spanning (and over-covering) the gap between them.
+
+    Words carry a "line_key" marking which of the block's own already-
+    correctly-clustered physical lines they came from (see
+    extraction.py's _group_words_into_lines/_group_lines_into_blocks) —
+    grouping by that instead of re-deriving line boundaries from raw
+    top-coordinates a second time matters on a skewed scan, where a single
+    line's words can land more than _LINE_TOLERANCE apart vertically:
+    re-clustering by tolerance alone would fragment one true line into
+    several undersized boxes, or bleed two adjacent lines into one
+    oversized box that then overlaps neighboring text once finalize.py
+    draws (and, for a rotated page, rotates) it."""
     covering = [w for w in words if w["start"] < end and w["end"] > start]
     if not covering:
         return []
+    if all("line_key" in w for w in covering):
+        grouped = {}
+        order = []
+        for w in covering:
+            key = w["line_key"]
+            if key not in grouped:
+                grouped[key] = []
+                order.append(key)
+            grouped[key].append(w)
+        lines = []
+        for key in order:
+            group = grouped[key]
+            lines.append({
+                "x0": min(w["x0"] for w in group), "top": min(w["top"] for w in group),
+                "x1": max(w["x1"] for w in group), "bottom": max(w["bottom"] for w in group),
+            })
+        return sorted(lines, key=lambda l: l["top"])
+
     lines = []
     for w in sorted(covering, key=lambda w: w["top"]):
         if lines and abs(w["top"] - lines[-1]["top"]) <= _LINE_TOLERANCE:
@@ -88,7 +120,18 @@ def _fail_job(job, message, pages=None):
     job.save(update_fields=fields)
 
 
-def _spans_for_block(raw):
+def _detect_all(text, ai_detectors, column_header=None):
+    """Runs the regex engine plus every enabled AI detector (Azure AI
+    Language, Claude — see ai_detection.py) over one block/cell of text and
+    resolves overlaps across all of them together, so a higher-confidence
+    match from either kind of engine always wins (FR-20)."""
+    span_lists = [detect_spans(text, column_header=column_header)]
+    for detector in ai_detectors:
+        span_lists.append(detector.detect(text))
+    return merge_spans(*span_lists) if ai_detectors else span_lists[0]
+
+
+def _spans_for_block(raw, ai_detectors):
     """Runs PHI detection over one extracted block, returning
     [(span, boxes), ...] — boxes already mapped onto the block's page-
     coordinate geometry so entities can be persisted directly from this."""
@@ -97,12 +140,12 @@ def _spans_for_block(raw):
         for cell in raw["cells"]:
             cell_text = raw["text"][cell["start"]:cell["end"]]
             cell_box = [{"x0": cell["x0"], "top": cell["top"], "x1": cell["x1"], "bottom": cell["bottom"]}]
-            for span in detect_spans(cell_text, column_header=cell["header"]):
+            for span in _detect_all(cell_text, ai_detectors, column_header=cell["header"]):
                 adjusted = {**span, "start": span["start"] + cell["start"], "end": span["end"] + cell["start"]}
                 spans_with_boxes.append((adjusted, cell_box))
     else:
         words = raw.get("words", [])
-        for span in detect_spans(raw["text"]):
+        for span in _detect_all(raw["text"], ai_detectors):
             spans_with_boxes.append((span, _line_group_boxes(words, span["start"], span["end"])))
     return spans_with_boxes
 
@@ -117,8 +160,17 @@ def run_ingestion(job, file_obj):
     returning."""
     parse_stage = _start_stage(job, "parse")
     try:
-        page_count, raw_blocks, raw_pages = extract_blocks(file_obj)
-    except ExtractionError as exc:
+        ai_detectors = build_detectors(settings)
+
+        validate_pdf(file_obj, filename=getattr(file_obj, "name", job.filename))
+        file_obj.seek(0)
+
+        page_count, raw_blocks, raw_pages = extract_blocks(
+            file_obj,
+            force_ocr=settings.REDACTION_FORCE_OCR,
+            azure_ocr_enabled=settings.REDACTION_ENABLE_AZURE_OCR,
+        )
+    except (ValidationError, ExtractionError, DetectorConfigError) as exc:
         _fail_stage(parse_stage, str(exc))
         _fail_job(job, str(exc), pages=0)
         return job
@@ -135,7 +187,7 @@ def run_ingestion(job, file_obj):
         # [(raw_block, [(span, boxes), ...]), ...] — kept in memory; nothing
         # is persisted until 'finalize' so a mid-stage failure leaves no
         # partial rows behind.
-        detected = [(raw, _spans_for_block(raw)) for raw in raw_blocks]
+        detected = [(raw, _spans_for_block(raw, ai_detectors)) for raw in raw_blocks]
     except Exception:
         logger.exception("Unexpected error detecting PHI for job %s", job.id)
         message = "An unexpected error occurred while detecting identifiers."
@@ -170,7 +222,10 @@ def run_ingestion(job, file_obj):
             job.save(update_fields=["pages", "status", "error_message"])
 
             for raw_page in raw_pages:
-                page = Page(job=job, number=raw_page["number"], width=raw_page["width"], height=raw_page["height"])
+                page = Page(
+                    job=job, number=raw_page["number"], width=raw_page["width"], height=raw_page["height"],
+                    rotation=raw_page.get("rotation", 0.0),
+                )
                 page.image.save(f"page-{raw_page['number']}.png", ContentFile(raw_page["png"]), save=False)
                 page.save()
 
@@ -184,11 +239,18 @@ def run_ingestion(job, file_obj):
                     entity_seq += 1
                     value = raw["text"][span["start"]:span["end"]]
                     cache_key = (span["category"], value.lower())
+                    # FR-21: apply detection.min_confidence via the job's
+                    # confidence_threshold — a span below it still becomes a
+                    # reviewable Entity (never silently dropped), it just
+                    # defaults to "keep" instead of the job's preset mode, so
+                    # a low-confidence guess doesn't change the document
+                    # until a reviewer confirms it (AC-13).
+                    default_mode = job.preset if span["confidence"] >= job.confidence_threshold else "keep"
                     Entity.objects.create(
                         job=job, block=block, code=f"E-{entity_seq:02d}",
                         category=span["category"], value=value,
                         surrogate_value=surrogate_cache[cache_key],
-                        mode=job.preset, confidence=span["confidence"],
+                        mode=default_mode, confidence=span["confidence"],
                         page=raw["page"], detector=span["detector"],
                         start_in_block=span["start"], end_in_block=span["end"],
                         boxes=boxes,

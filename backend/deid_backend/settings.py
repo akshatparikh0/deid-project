@@ -173,3 +173,47 @@ CORS_ALLOWED_ORIGINS = [
     *[o for o in os.environ.get('DJANGO_CORS_ALLOWED_ORIGINS', '').split(',') if o],
 ]
 CORS_ALLOW_ALL_ORIGINS = DEBUG
+
+REDACTION_POLICY_PATH = os.environ.get(
+    "REDACTION_POLICY_PATH",
+    str(BASE_DIR / "config" / "default_policy.json"),
+)
+
+REDACTION_ENABLE_AI = (
+    os.environ.get("REDACTION_ENABLE_AI", "False").lower() == "true"
+)
+
+REDACTION_ENABLE_AZURE_LANGUAGE = (
+    os.environ.get(
+        "REDACTION_ENABLE_AZURE_LANGUAGE",
+        "False",
+    ).lower() == "true"
+)
+
+REDACTION_ENABLE_AZURE_OCR = (
+    os.environ.get(
+        "REDACTION_ENABLE_AZURE_OCR",
+        "False",
+    ).lower() == "true"
+)
+
+REDACTION_FORCE_OCR = (
+    os.environ.get("REDACTION_FORCE_OCR", "False").lower() == "true"
+)
+
+# --- Async processing -------------------------------------------------
+# No broker configured -> every Celery task runs synchronously in-process
+# (CELERY_TASK_ALWAYS_EAGER), so local dev and the test suite need no extra
+# services. Set CELERY_BROKER_URL (e.g. redis://...) to run real
+# out-of-request workers; start one with `celery -A deid_backend worker`.
+CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "")
+CELERY_RESULT_BACKEND = os.environ.get("CELERY_RESULT_BACKEND", CELERY_BROKER_URL or None)
+CELERY_TASK_ALWAYS_EAGER = (
+    os.environ.get("CELERY_TASK_ALWAYS_EAGER", "" if CELERY_BROKER_URL else "True").lower() == "true"
+)
+CELERY_TASK_EAGER_PROPAGATES = True
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_TASK_DEFAULT_QUEUE = os.environ.get("CELERY_TASK_DEFAULT_QUEUE", "deid-ingest")
