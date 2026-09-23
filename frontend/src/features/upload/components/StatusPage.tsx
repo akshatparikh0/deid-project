@@ -7,6 +7,7 @@ import { ErrorBanner, LoadingState } from '@/components/States';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { paths } from '@/config/paths';
 import { formatDuration } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { setActiveBatch } from '@/stores/activeJob';
@@ -179,7 +180,7 @@ export function StatusPage() {
                   type="button"
                   size="sm"
                   disabled={!canReview}
-                  onClick={() => navigate(`/jobs/${job.id}/review`, { state: { from: 'status' } })}
+                  onClick={() => navigate(paths.jobReview.getHref(job.id), { state: { from: 'status' } })}
                 >
                   Review
                 </Button>

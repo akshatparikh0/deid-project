@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/Layout';
 import { EmptyState, ErrorBanner, LoadingState } from '@/components/States';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { paths } from '@/config/paths';
 import { isPatientFolder } from '@/lib/folders';
 import { showToast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
@@ -61,7 +62,7 @@ export function UploadPage() {
   const [searchParams] = useSearchParams();
   const folderParam = searchParams.get('folder');
   const folder = folderParam ? Number(folderParam) : null;
-  const libraryHref = folder ? `/queue?folder=${folder}` : '/queue';
+  const libraryHref = paths.queue.getHref(folder);
   const [folderValid, setFolderValid] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -127,7 +128,7 @@ export function UploadPage() {
         showToast(`${batch.total} file(s) queued for scanning.`);
       }
       setActiveBatch(batch.id);
-      navigate(`/uploads/${batch.id}/status`);
+      navigate(paths.uploadStatus.getHref(batch.id));
     } catch (err) {
       setError(err instanceof ApiError ? err.detail : 'Upload failed. Please try again.');
       setSubmitting(false);

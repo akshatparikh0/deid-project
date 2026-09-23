@@ -17,6 +17,7 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { ErrorBanner, LoadingState } from '@/components/States';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { paths } from '@/config/paths';
 import { cn } from '@/lib/utils';
 import { getDisplayThreshold } from '@/lib/threshold';
 import { showToast } from '@/lib/toast';
@@ -187,7 +188,8 @@ export function ReviewPage() {
           </div>
           <div className="text-muted-foreground font-mono text-[13.5px] whitespace-nowrap">
             {job.code} · {job.pages} page{job.pages === 1 ? '' : 's'} ·{' '}
-            <Link to={`/jobs/${jobId}/rules`}>Rules</Link> · <Link to={`/jobs/${jobId}/audit`}>Audit trail</Link>
+            <Link to={paths.jobRules.getHref(jobId)}>Rules</Link> ·{' '}
+            <Link to={paths.jobAudit.getHref(jobId)}>Audit trail</Link>
           </div>
         </div>
 
@@ -258,10 +260,8 @@ export function ReviewPage() {
             onClick={() => {
               const dest =
                 openedFrom === 'status' && job.batch != null
-                  ? `/uploads/${job.batch}/status`
-                  : openedState?.folder != null
-                    ? `/queue?folder=${openedState.folder}`
-                    : '/queue';
+                  ? paths.uploadStatus.getHref(job.batch)
+                  : paths.queue.getHref(openedState?.folder);
               setActiveJob(null);
               navigate(dest);
             }}

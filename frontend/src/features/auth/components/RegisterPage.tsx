@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { paths } from '@/config/paths';
 import { getAuthStatusSnapshot, register, subscribeAuth } from '@/lib/auth';
 
 export function RegisterPage() {
@@ -20,7 +21,7 @@ export function RegisterPage() {
   const navigate = useNavigate();
 
   if (status === 'authenticated') {
-    return <Navigate to="/queue" replace />;
+    return <Navigate to={paths.queue.getHref()} replace />;
   }
 
   async function onSubmit(e: FormEvent) {
@@ -29,7 +30,7 @@ export function RegisterPage() {
     setError(null);
     try {
       await register(name, username, password);
-      navigate('/queue', { replace: true });
+      navigate(paths.queue.getHref(), { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.detail : 'Registration failed. Please try again.');
       setSubmitting(false);
@@ -103,7 +104,7 @@ export function RegisterPage() {
           </form>
 
           <div className="text-muted-foreground mt-5 text-center text-[12.5px]">
-            Already have an account? <Link to="/login">Sign in</Link>
+            Already have an account? <Link to={paths.login.getHref()}>Sign in</Link>
           </div>
         </CardContent>
       </Card>

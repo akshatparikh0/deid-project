@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { paths } from '@/config/paths';
 import { categoryLabel, MODE_LABELS } from '@/lib/categories';
 import { isPatientFolder, pathTo } from '@/lib/folders';
 import { showToast } from '@/lib/toast';
@@ -50,7 +51,7 @@ export function ConfigRulesPage() {
     // Every edit already persists immediately via updateFolderRule (see
     // patchRule below), so there's nothing left to flush here.
     showToast('Ruleset saved.');
-    navigate(`/queue?folder=${folderId}`);
+    navigate(paths.queue.getHref(folderId));
   }
 
   function patchRule(category: FolderCategoryRule['category'], patch: Partial<FolderCategoryRule>) {
@@ -80,7 +81,7 @@ export function ConfigRulesPage() {
               description="Detection rules are configured per patient folder. Open a patient folder in the document library, then configure its ruleset from there."
               action={
                 <Button asChild>
-                  <Link to="/queue">Go to document library</Link>
+                  <Link to={paths.queue.getHref()}>Go to document library</Link>
                 </Button>
               }
             />

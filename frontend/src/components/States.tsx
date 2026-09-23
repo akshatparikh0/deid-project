@@ -28,6 +28,16 @@ export function LoadingState({ label = 'Loading…' }: { label?: string }) {
   );
 }
 
+/** Fills the viewport — used for the auth bootstrap gate and as the
+ * Suspense fallback while a lazy-loaded route chunk downloads. */
+export function FullPageLoader({ label = 'Loading…' }: { label?: string }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center">
+      <LoadingState label={label} />
+    </div>
+  );
+}
+
 export function EmptyState({
   title,
   description,

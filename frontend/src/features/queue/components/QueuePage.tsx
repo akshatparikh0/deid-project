@@ -19,6 +19,7 @@ import { EmptyState, ErrorBanner, LoadingState } from '@/components/States';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { paths } from '@/config/paths';
 import { cn } from '@/lib/utils';
 import { folderLevel, pathTo } from '@/lib/folders';
 import { formatRelative } from '@/lib/format';
@@ -112,8 +113,8 @@ export function QueuePage() {
   // patient folder, and documents can only be uploaded inside one.
   const canCreateFolder = !isPatientFolder;
   const canConfigureRules = isPatientFolder;
-  const rulesHref = currentId ? `/folders/${currentId}/rules` : '/queue';
-  const uploadHref = currentId ? `/upload?folder=${currentId}` : '/queue';
+  const rulesHref = currentId ? paths.folderRules.getHref(currentId) : paths.queue.getHref();
+  const uploadHref = currentId ? paths.upload.getHref(currentId) : paths.queue.getHref();
 
   function onAddDocument() {
     // Rules are configured separately via the gear button now, so "Add
@@ -362,7 +363,7 @@ export function QueuePage() {
                       <div className="flex flex-wrap justify-end gap-1.5">
                         {job.status !== 'failed' && (
                           <Button asChild variant="ghost" size="sm">
-                            <Link to={`/jobs/${job.id}/audit`}>View</Link>
+                            <Link to={paths.jobAudit.getHref(job.id)}>View</Link>
                           </Button>
                         )}
                         <Button

@@ -9,6 +9,7 @@ import {
   getUploadReadySnapshot,
   subscribeActiveJob,
 } from '@/stores/activeJob';
+import { paths } from '@/config/paths';
 import { getAuthUserSnapshot, logout, subscribeAuth } from '@/lib/auth';
 import { routeForJobStatus } from '@/lib/jobRoute';
 import { cn } from '@/lib/utils';
@@ -26,23 +27,23 @@ export function Layout() {
 
   async function onLogout() {
     await logout();
-    navigate('/login', { replace: true });
+    navigate(paths.login.getHref(), { replace: true });
   }
 
   const path = location.pathname;
-  const rulesPath = activeFolder ? `/folders/${activeFolder.id}/rules` : null;
+  const rulesPath = activeFolder ? paths.folderRules.getHref(activeFolder.id) : null;
   const uploadPath =
-    activeFolder && uploadReadyFolderId === activeFolder.id ? `/upload?folder=${activeFolder.id}` : null;
+    activeFolder && uploadReadyFolderId === activeFolder.id ? paths.upload.getHref(activeFolder.id) : null;
   const reviewPath = activeJob ? routeForJobStatus(activeJob.id, activeJob.status) : null;
-  const statusPath = activeBatchId != null ? `/uploads/${activeBatchId}/status` : null;
+  const statusPath = activeBatchId != null ? paths.uploadStatus.getHref(activeBatchId) : null;
 
   const items = [
     {
       num: '01',
       label: 'Document library',
       badge: queueCount != null ? String(queueCount) : '',
-      to: '/queue',
-      active: path === '/queue' || /^\/jobs\/\d+\/audit$/.test(path),
+      to: paths.queue.getHref(),
+      active: path === paths.queue.path || /^\/jobs\/\d+\/audit$/.test(path),
     },
     {
       num: '02',
@@ -56,7 +57,7 @@ export function Layout() {
       label: 'Upload File',
       badge: '',
       to: uploadPath,
-      active: path === '/upload',
+      active: path === paths.upload.path,
     },
     {
       num: '04',

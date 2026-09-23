@@ -8,6 +8,7 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { EmptyState, ErrorBanner, LoadingState } from '@/components/States';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { paths } from '@/config/paths';
 import { formatDateTime, formatPercent } from '@/lib/format';
 import { setActiveJob } from '@/stores/activeJob';
 import { ModePill } from './ModePill';
@@ -62,7 +63,7 @@ export function AuditPage() {
     setReopenError(null);
     try {
       await reopenJob(jobId);
-      navigate(`/jobs/${jobId}/review`);
+      navigate(paths.jobReview.getHref(jobId));
     } catch (err) {
       setReopenError(err instanceof ApiError ? err.detail : 'Failed to reopen this document.');
       setReopening(false);
@@ -75,7 +76,10 @@ export function AuditPage() {
 
   return (
     <div>
-      <Link to="/queue" className="mb-1.5 inline-block text-xs font-medium text-muted-foreground hover:text-foreground">
+      <Link
+        to={paths.queue.getHref()}
+        className="mb-1.5 inline-block text-xs font-medium text-muted-foreground hover:text-foreground"
+      >
         ← Document library
       </Link>
       <PageHeader
@@ -90,7 +94,7 @@ export function AuditPage() {
               </Button>
             ) : (
               <Button variant="outline" size="sm" asChild>
-                <Link to={`/jobs/${jobId}/review`}>Continue review</Link>
+                <Link to={paths.jobReview.getHref(jobId)}>Continue review</Link>
               </Button>
             )}
             <Button size="sm" onClick={onExportCsv} disabled={exporting}>

@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { paths } from '@/config/paths';
 import { categoryLabel, MODE_LABELS } from '@/lib/categories';
 import { formatPercent } from '@/lib/format';
 import { getDisplayThreshold, setDisplayThreshold } from '@/lib/threshold';
@@ -74,7 +75,7 @@ export function RulesPage() {
     try {
       const { entities: updated } = await applyRules(jobId);
       showToast(`Defaults applied to ${updated.length} entities.`);
-      navigate(`/jobs/${jobId}/review`);
+      navigate(paths.jobReview.getHref(jobId));
     } catch (err) {
       setError(err instanceof ApiError ? err.detail : 'Failed to apply rules.');
       setApplying(false);

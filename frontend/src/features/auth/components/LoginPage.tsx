@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { paths } from '@/config/paths';
 import { getAuthStatusSnapshot, login, subscribeAuth } from '@/lib/auth';
 
 export function LoginPage() {
@@ -21,7 +22,7 @@ export function LoginPage() {
 
   if (status === 'authenticated') {
     const from = (location.state as { from?: { pathname: string } } | null)?.from;
-    return <Navigate to={from?.pathname ?? '/queue'} replace />;
+    return <Navigate to={from?.pathname ?? paths.queue.getHref()} replace />;
   }
 
   async function onSubmit(e: FormEvent) {
@@ -30,7 +31,7 @@ export function LoginPage() {
     setError(null);
     try {
       await login(username, password);
-      navigate('/queue', { replace: true });
+      navigate(paths.queue.getHref(), { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.detail : 'Login failed. Please try again.');
       setSubmitting(false);
@@ -91,7 +92,7 @@ export function LoginPage() {
           </form>
 
           <div className="text-muted-foreground mt-5 text-center text-[12.5px]">
-            Don't have an account? <Link to="/register">Register</Link>
+            Don't have an account? <Link to={paths.register.getHref()}>Register</Link>
           </div>
         </CardContent>
       </Card>

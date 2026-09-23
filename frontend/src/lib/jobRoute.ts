@@ -1,4 +1,5 @@
 import type { JobStatus } from '@/api/types';
+import { paths } from '@/config/paths';
 
 /** Where clicking into a job should land, based on how far it's progressed.
  * `batchId` is the job's UploadBatch id (Job.batch) — while a job is still
@@ -8,13 +9,13 @@ import type { JobStatus } from '@/api/types';
 export function routeForJobStatus(id: number, status: JobStatus, batchId?: number | null): string | null {
   switch (status) {
     case 'complete':
-      return `/jobs/${id}/audit`;
+      return paths.jobAudit.getHref(id);
     case 'failed':
-      return batchId != null ? `/uploads/${batchId}/status` : null;
+      return batchId != null ? paths.uploadStatus.getHref(batchId) : null;
     case 'scanning':
-      return batchId != null ? `/uploads/${batchId}/status` : `/jobs/${id}/rules`;
+      return batchId != null ? paths.uploadStatus.getHref(batchId) : paths.jobRules.getHref(id);
     case 'in_review':
     default:
-      return `/jobs/${id}/review`;
+      return paths.jobReview.getHref(id);
   }
 }
