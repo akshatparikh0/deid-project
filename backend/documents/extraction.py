@@ -31,10 +31,7 @@ replaces the page's text if it finds *more* content than native extraction
 did, so a genuinely short page never gets worse by attempting OCR.
 """
 import io
-<<<<<<< HEAD
-=======
 import math
->>>>>>> feature/screen-map
 import os
 import re
 import shutil
@@ -611,13 +608,10 @@ def _ocr_words(image, resolution):
                 "x1": (left + width) * scale,
                 "bottom": (top + height) * scale,
                 "confidence": confidence / 100.0,
-<<<<<<< HEAD
-=======
                 # Tesseract's own line grouping, from its internal layout
                 # analysis — see _group_words_into_lines for why this is
                 # used instead of re-deriving lines from raw coordinates.
                 "line_key": (data["block_num"][index], data["par_num"][index], data["line_num"][index]),
->>>>>>> feature/screen-map
             }
         )
     return words
@@ -724,19 +718,6 @@ def extract_blocks(file_obj, *, force_ocr=False, azure_ocr_enabled=False):
                         words = ocr_words
                         tables = []
                         source = "tesseract"
-<<<<<<< HEAD
-
-                    # Tesseract still came up short (or isn't installed) —
-                    # try Azure Document Intelligence as a last resort
-                    # before accepting a possibly-blank page.
-                    if azure_ocr_enabled and len(words) < _MIN_NATIVE_WORDS:
-                        azure_words = _azure_ocr_words(ocr_image, page.width, page.height)
-                        if len(azure_words) > len(words):
-                            words = azure_words
-                            tables = []
-                            source = "azure_ocr"
-=======
->>>>>>> feature/screen-map
 
                     # Tesseract still came up short (or isn't installed) —
                     # try Azure Document Intelligence as a last resort
@@ -775,23 +756,6 @@ def extract_blocks(file_obj, *, force_ocr=False, azure_ocr_enabled=False):
         raise ExtractionError(f"Could not parse this PDF: {message}") from exc
 
     if not blocks:
-<<<<<<< HEAD
-        if not blocks:
-            if not _TESSERACT_AVAILABLE:
-                hint = (
-                    " Tesseract OCR is not installed, so image-only pages "
-                    "could not be processed."
-                )
-            else:
-                hint = (
-                    " Tesseract was available, but it did not find usable text."
-                )
-
-            raise ExtractionError(
-                "No extractable text was found. The PDF may be blank or "
-                f"contain an unreadable scanned image.{hint}"
-            )
-=======
         if not _TESSERACT_AVAILABLE:
             hint = (
                 " Tesseract OCR is not installed, so image-only pages "
@@ -806,5 +770,4 @@ def extract_blocks(file_obj, *, force_ocr=False, azure_ocr_enabled=False):
             "No extractable text was found. The PDF may be blank or "
             f"contain an unreadable scanned image.{hint}"
         )
->>>>>>> feature/screen-map
     return page_count, blocks, pages

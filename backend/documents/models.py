@@ -260,11 +260,7 @@ class AuditRecord(models.Model):
     these rows at the database level, same as every other per-job table;
     true database-enforced append-only (a Postgres REVOKE UPDATE/DELETE
     grant) is a deployment-time hardening step, not something the ORM layer
-<<<<<<< HEAD
     alone can guarantee — see infra/README.md."""
-=======
-    alone can guarantee."""
->>>>>>> feature/screen-map
     job = models.ForeignKey(Job, related_name="audit_records", on_delete=models.CASCADE)
     entity_code = models.CharField(max_length=12)
     category = models.CharField(max_length=32, choices=CATEGORY_CHOICES)

@@ -7,18 +7,10 @@ bounding boxes so the Review screen can draw redaction/highlight boxes on
 the real rendered page image), one Page row per page image, and seed one
 CategoryRule per canonical Safe Harbor category.
 
-<<<<<<< HEAD
-Runs on a background thread or a Celery task (see tasks.py), advancing
-job.status through the parse/detect/transform/finalize stages
-(categories.STAGE_ORDER) and recording each one's start/finish on a
-JobStage row so the Status page can poll live per-stage progress and
-timing for many jobs at once.
-=======
 Runs as a Celery task (see tasks.py), advancing job.status through the
 parse/detect/transform/finalize stages (categories.STAGE_ORDER) and recording
 each one's start/finish on a JobStage row so the Status page can poll live
 per-stage progress and timing for many jobs at once.
->>>>>>> feature/screen-map
 """
 import logging
 
@@ -171,15 +163,11 @@ def run_ingestion(job, file_obj):
     try:
         ai_detectors = build_detectors(settings)
 
-<<<<<<< HEAD
         validate_pdf(
             file_obj,
             filename=getattr(file_obj, "name", job.filename),
         )
 
-=======
-        validate_pdf(file_obj, filename=getattr(file_obj, "name", job.filename))
->>>>>>> feature/screen-map
         file_obj.seek(0)
 
         page_count, raw_blocks, raw_pages = extract_blocks(
@@ -261,13 +249,9 @@ def run_ingestion(job, file_obj):
                     # reviewable Entity (never silently dropped), it just
                     # defaults to "keep" instead of the job's preset mode, so
                     # a low-confidence guess doesn't change the document
-<<<<<<< HEAD
                     # until a reviewer confirms it (AC-13). The auto-apply
                     # step below (for jobs with no manual review checkpoint)
                     # is scoped to respect this same floor.
-=======
-                    # until a reviewer confirms it (AC-13).
->>>>>>> feature/screen-map
                     default_mode = job.preset if span["confidence"] >= job.confidence_threshold else "keep"
                     Entity.objects.create(
                         job=job, block=block, code=f"E-{entity_seq:02d}",

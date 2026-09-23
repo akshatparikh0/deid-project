@@ -1,38 +1,16 @@
 """
-<<<<<<< HEAD
-Two independent async mechanisms currently coexist here, from two branches
-that each added background processing without knowing about the other:
-
-- seed_stages()/submit_job() run a job on an in-process ThreadPoolExecutor
-  and track per-stage progress in JobStage, for the Status page. Used by
-  UploadBatchListCreateView and JobRetryView (see views.py).
-- ingest_job is a Celery task (FR-56/FR-57), dispatched via .delay(). With
-  no CELERY_BROKER_URL configured it runs synchronously in-process
-  (CELERY_TASK_ALWAYS_EAGER, settings.py); with one, a real out-of-request
-  worker picks it up (`celery -A deid_backend worker -Q deid-ingest`). Used
-  by JobListCreateView (single-file upload).
-
-This is deliberate, temporary duplication kept from a merge rather than a
-design choice — consolidating on one of the two (most likely: point the
-thread-pool call sites at ingest_job.delay() instead) is follow-up work,
-not done here so neither branch's already-working feature broke in the
-merge.
-=======
-Runs each job's pipeline (ingest.run_ingestion) as a Celery task so the
-upload request can return immediately and many files can process at once.
-With no broker configured, CELERY_TASK_ALWAYS_EAGER runs the task
-synchronously in-process (see deid_backend/settings.py) — same zero-setup
-local-dev behavior as before, but a real broker/worker can be pointed at in
-production without any code change here.
->>>>>>> feature/screen-map
+Runs each job's pipeline (ingest.run_ingestion) as a Celery task (FR-56/
+FR-57), dispatched via .delay(), so the upload request can return
+immediately and many files can process at once. With no CELERY_BROKER_URL
+configured it runs synchronously in-process (CELERY_TASK_ALWAYS_EAGER,
+settings.py) — same zero-setup local-dev behavior as before; with one, a
+real out-of-request worker picks it up (`celery -A deid_backend worker -Q
+deid-ingest`).
 """
 import logging
 
 from celery import shared_task
-<<<<<<< HEAD
 from django.db import close_old_connections
-=======
->>>>>>> feature/screen-map
 from django.utils import timezone
 
 from .categories import STAGE_ORDER
@@ -71,16 +49,5 @@ def ingest_job(job_id):
         JobStage.objects.filter(job_id=job_id, status="running").update(
             status="failed", finished_at=timezone.now(), error_message="Unexpected server error.",
         )
-<<<<<<< HEAD
     finally:
         close_old_connections()
-
-
-@shared_task(name="documents.ingest_job")
-def ingest_job(job_id):
-    job = Job.objects.get(pk=job_id)
-    with job.file.open("rb") as fh:
-        run_ingestion(job, fh)
-    return job.status
-=======
->>>>>>> feature/screen-map

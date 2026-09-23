@@ -33,17 +33,11 @@ export function Layout() {
   const path = location.pathname;
   const rulesPath = activeFolder ? paths.folderRules.getHref(activeFolder.id) : null;
   const uploadPath =
-<<<<<<< HEAD
-    activeFolder && uploadReadyFolderId === activeFolder.id ? `/upload?folder=${activeFolder.id}` : null;
+    activeFolder && uploadReadyFolderId === activeFolder.id ? paths.upload.getHref(activeFolder.id) : null;
   const reviewPath = activeJob
     ? routeForJobStatus(activeJob.id, activeJob.status, undefined, activeJob.entityCount)
     : null;
-  const statusPath = activeBatchId != null ? `/uploads/${activeBatchId}/status` : null;
-=======
-    activeFolder && uploadReadyFolderId === activeFolder.id ? paths.upload.getHref(activeFolder.id) : null;
-  const reviewPath = activeJob ? routeForJobStatus(activeJob.id, activeJob.status) : null;
   const statusPath = activeBatchId != null ? paths.uploadStatus.getHref(activeBatchId) : null;
->>>>>>> feature/screen-map
 
   const items = [
     {

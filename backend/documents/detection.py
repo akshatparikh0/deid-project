@@ -120,8 +120,6 @@ _FACILITY_SUFFIX = (
     r"Hospital|Medical\s+Center|Clinic|Health\s+System|Healthcare|Physicians|"
     r"Associates|Urgent\s+Care|Imaging\s+Center|Laboratory|Labs?|Practice"
 )
-<<<<<<< HEAD
-=======
 _FACILITY_SUFFIX_UPPER = (
     r"HOSPITAL|MEDICAL\s+CENTER|CLINIC|HEALTH\s+SYSTEM|HEALTHCARE|PHYSICIANS|"
     r"ASSOCIATES|URGENT\s+CARE|IMAGING\s+CENTER|LABORATORY|LABS?|PRACTICE"
@@ -139,7 +137,6 @@ _FACILITY_NAME = re.compile(
     rf"\b([A-Z][A-Za-z&'\-]+(?:\s+(?:of|the|and)?\s*[A-Z][A-Za-z&'\-]+){{0,4}}\s+(?:{_FACILITY_SUFFIX})"
     rf"|[A-Z][A-Z&'\-]+(?:\s+(?:OF|THE|AND)?\s*[A-Z][A-Z&'\-]+){{0,4}}\s+(?:{_FACILITY_SUFFIX_UPPER}))\b"
 )
->>>>>>> feature/screen-map
 _EMPLOYER_CUES = r"Employer|Employed\s+by"
 _DOB_CONTEXT = re.compile(r"(?:dob|date\s+of\s+birth|birth\s*date|born)[\s:#-]*$", re.I)
 _DOS_CONTEXT = re.compile(r"(?:dos|date\s+of\s+service|service\s+date|visit\s+date|encounter\s+date|seen\s+on)[\s:#-]*$", re.I)
@@ -158,13 +155,10 @@ _PATTERNS = [
     ("ssn", re.compile(r"\b\d{3}-\d{2}-\d{4}\b"), 0.99, "pattern"),
     ("email", re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"), 0.99, "pattern"),
     ("url", re.compile(r"\bhttps?://[^\s)>\]]+"), 0.97, "pattern"),
-<<<<<<< HEAD
-=======
     # A bare "www." address with no scheme (common in a printed footer/
     # letterhead, e.g. "via www.cmhhealth.example.") is just as identifying
     # as one with "https://" in front.
     ("url", re.compile(r"\bwww\.[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+\b"), 0.9, "pattern"),
->>>>>>> feature/screen-map
     ("ip_address", re.compile(r"\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b"), 0.95, "pattern"),
     ("phone", re.compile(r"\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}\b"), 0.95, "pattern"),
     # Dates default to "other_date"; a DOB/DOS cue immediately before the
@@ -193,14 +187,6 @@ _PATTERNS = [
     ("license", re.compile(r"\bNPI\b\s*[:#]?\s*(\d{10})", re.I), 0.92, "pattern"),
     ("license", re.compile(r"\bDEA\b\s*(?:No\.?|Number|#)?\s*[:#]?\s*([A-Za-z0-9]{6,9})", re.I), 0.9, "pattern"),
     ("vehicle", re.compile(r"\b(?:Plate|Vehicle|License\s+Plate)\b\s*(?:No\.?|Number|#)?\s*[:#]?\s*([A-Za-z0-9-]{4,8})", re.I), 0.85, "pattern"),
-<<<<<<< HEAD
-    ("device_id", re.compile(r"\b(?:Device|Serial|Pump)\b\s*(?:No\.?|Number|S/N|#)?\s*[:#]?\s*([A-Za-z0-9-]{4,})", re.I), 0.85, "pattern"),
-    ("employer", re.compile(rf"\b(?:{_EMPLOYER_CUES})\s*[:\-]\s*([A-Z][A-Za-z0-9 &,.'\-]{{2,60}})"), 0.85, "pattern"),
-    ("facility_name", re.compile(r"\b(?:Facility|Location|Clinic|Site)\s*[:\-]\s*([A-Z][A-Za-z0-9 &,.'\-]{2,60})"), 0.88, "pattern"),
-    ("facility_name", re.compile(
-        rf"\b([A-Z][A-Za-z&'\-]+(?:\s+(?:of|the|and)?\s*[A-Z][A-Za-z&'\-]+){{0,4}}\s+(?:{_FACILITY_SUFFIX}))\b"
-    ), 0.85, "pattern"),
-=======
     # An ambulance/transport unit call sign ("unit MEDIC-70") — the cue is
     # "unit" specifically here (as opposed to a hospital department like
     # "Coronary Care Unit", which is a plain English phrase, not a call
@@ -222,8 +208,12 @@ _PATTERNS = [
     ("other", re.compile(r"\border\b\s*(?:No\.?|Number|#)?\s*[:#]?\s*((?=[A-Za-z0-9-]*\d)[A-Za-z0-9-]{4,})", re.I), 0.8, "pattern"),
     ("other", re.compile(r"\bCLIA\b\s*(?:No\.?|Number|#)?\s*[:#]?\s*([A-Za-z0-9]{4,})", re.I), 0.9, "pattern"),
     ("employer", re.compile(rf"\b(?:{_EMPLOYER_CUES})\s*[:\-]\s*([A-Z][A-Za-z0-9 &,.'\-]{{2,60}})"), 0.85, "pattern"),
+    # A suffix-based facility name (e.g. "Granite Peak Memorial Hospital",
+    # title-case or all-caps letterhead) is handled separately by
+    # _FACILITY_NAME below via _iter_overlapping_matches, not here — only
+    # the explicit "Facility:"/"Location:"-labeled form belongs in this
+    # fixed-pattern list.
     ("facility_name", re.compile(r"\b(?:Facility|Location|Clinic|Site)\s*[:\-]\s*([A-Z][A-Za-z0-9 &,.'\-]{2,60})"), 0.88, "pattern"),
->>>>>>> feature/screen-map
     ("patient_name", re.compile(rf"(?:{_PATIENT_CUES})\s*[:\-]?\s+({_NAME_BODY})"), 0.9, "pattern"),
     ("physician_name", re.compile(rf"(?:{_PHYSICIAN_CUES})\s*[:\-]?\s+({_NAME_BODY})"), 0.9, "pattern"),
     ("guarantor_name", re.compile(rf"(?:{_GUARANTOR_CUES})\s*[:\-]?\s+({_NAME_BODY})"), 0.9, "pattern"),
@@ -253,10 +243,6 @@ _GENERIC_NAME = re.compile(
     # document that also runs several unrelated text fragments together
     # into one garbled block; period-less real text this could
     # over-trigger on (e.g. a stray single-letter list marker) is rarer
-<<<<<<< HEAD
-    # than missing the initial in scanned/reflowed medical records.
-    r"\b([A-Z][a-z]+(?:\s[A-Z]\.?)?\s[A-Z][a-z]+(?:\s(?:MD|RN|DO|NP|PA)\b)?)\b"
-=======
     # than missing the initial in scanned/reflowed medical records. Each
     # name word allows an internal hyphen/apostrophe ("Okonkwo-Delacroix")
     # *and* a second capital right after one ("O'Shaughnessy", "D'Angelo",
@@ -265,7 +251,6 @@ _GENERIC_NAME = re.compile(
     # The credential tail allows more than one ("Fatima Adeyemi, MD, FACC"
     # is two credentials, not one).
     rf"\b([A-Z][A-Za-z'\-]+(?:\s[A-Z]\.?)?\s[A-Z][A-Za-z'\-]+(?:,?\s(?:{_CREDENTIAL_SUFFIX})\b)*)\b"
->>>>>>> feature/screen-map
 )
 _WORD_AND_GAP = re.compile(r"\S+\s+")
 
@@ -347,8 +332,6 @@ _HEADER_CATEGORY_MAP = [
     (re.compile(r"\bname\b", re.I), "person_name"),
     (re.compile(r"facility|location|\bsite\b", re.I), "facility_name"),
     (re.compile(r"member\s*id|health\s*plan", re.I), "member_id"),
-<<<<<<< HEAD
-=======
     # Neither an insurance payer's own name nor a plan/group number has its
     # own category in the Safe Harbor-derived taxonomy — a payer name is an
     # organization, closest to facility_name; a group number identifies a
@@ -361,7 +344,6 @@ _HEADER_CATEGORY_MAP = [
     (re.compile(r"\bgroup\b", re.I), "member_id"),
     (re.compile(r"\bnpi\b|\bdea\b", re.I), "license"),
     (re.compile(r"accession|encounter|\border\b|\bclia\b|specimen", re.I), "other"),
->>>>>>> feature/screen-map
     (re.compile(r"\baccount\b", re.I), "account"),
     (re.compile(r"phone|telephone", re.I), "phone"),
     (re.compile(r"\bemail\b", re.I), "email"),
@@ -423,14 +405,6 @@ def _header_candidate(text, column_header):
             if category in _DATE_HEADER_CATEGORIES and _BARE_YEAR.match(value):
                 return None
             if category == "age_over_89":
-<<<<<<< HEAD
-                # A bare "Age" column is only PHI when the value itself is
-                # above the Safe Harbor 89 threshold (FR-36/FR-37) — ages 89
-                # and below are explicitly not identifiers and must pass
-                # through unflagged.
-                if not value.isdigit() or int(value) <= 89:
-                    return None
-=======
                 if not value.isdigit():
                     return None
                 # A bare "Age" column above the Safe Harbor 89 threshold is
@@ -439,7 +413,6 @@ def _header_candidate(text, column_header):
                 # same split in the bare age pattern in detect_spans).
                 if int(value) <= 89:
                     category = "age_89_or_below"
->>>>>>> feature/screen-map
             start = len(text) - len(text.lstrip())
             return {
                 "start": start, "end": start + len(value),
@@ -487,12 +460,6 @@ def detect_spans(text, column_header=None):
                 elif _DOS_CONTEXT.search(window):
                     cat = "date_of_service"
             elif category == "age_over_89":
-<<<<<<< HEAD
-                # Safe Harbor only treats ages above 89 as an identifier
-                # (FR-36); 89 and below must pass through unflagged.
-                if int(text[start:end]) <= 89:
-                    continue
-=======
                 # Safe Harbor only *requires* redacting ages above 89
                 # (FR-36); 89 and below is the separate, lower-urgency
                 # age_89_or_below category — still a reviewable finding
@@ -502,7 +469,6 @@ def detect_spans(text, column_header=None):
                 # than being silently dropped.
                 if int(text[start:end]) <= 89:
                     cat = "age_89_or_below"
->>>>>>> feature/screen-map
             candidates.append({"start": start, "end": end, "category": cat, "confidence": conf, "detector": detector})
 
     for rx, category, conf in (

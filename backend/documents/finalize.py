@@ -12,11 +12,6 @@ attributable to the source document: same page count, size, and layout
 from __future__ import annotations
 
 import io
-<<<<<<< HEAD
-
-import pymupdf
-
-=======
 import math
 
 import pymupdf
@@ -39,7 +34,6 @@ def _padded_box(box):
         "x1": box["x1"] + _BOX_PADDING_X, "bottom": box["bottom"] + _BOX_PADDING_Y,
     }
 
->>>>>>> feature/screen-map
 
 def _replacement_text(entity):
     if entity.mode == "mask":
@@ -49,9 +43,6 @@ def _replacement_text(entity):
     return None  # "redact" burns a blank black bar; "keep" is never passed in
 
 
-<<<<<<< HEAD
-def build_redacted_pdf(source_bytes: bytes, entities) -> bytes:
-=======
 def _rotated_box_quad(box, angle_degrees):
     """A box's own (x0, top, x1, bottom) is an axis-aligned rectangle sized
     to bound the (possibly tilted) glyphs it covers on a scanned page —
@@ -94,7 +85,6 @@ def _rotated_text_origin(box, angle_degrees):
 
 
 def build_redacted_pdf(source_bytes: bytes, entities, page_rotations: dict[int, float] | None = None) -> bytes:
->>>>>>> feature/screen-map
     """Returns the finalized PDF bytes. Every non-"keep" entity's boxes
     (one rectangle per visual line — see Entity.boxes) become a true
     redaction annotation: a black bar with no recoverable text for
@@ -102,9 +92,6 @@ def build_redacted_pdf(source_bytes: bytes, entities, page_rotations: dict[int, 
     ("mask") or the entity's deterministic surrogate value ("pseudo"),
     drawn once per entity (on its first box only, so a value wrapped across
     lines doesn't repeat its replacement text). "keep" entities are left
-<<<<<<< HEAD
-    untouched."""
-=======
     untouched.
 
     page_rotations (page number -> degrees, from Page.rotation) lets a
@@ -119,7 +106,6 @@ def build_redacted_pdf(source_bytes: bytes, entities, page_rotations: dict[int, 
     itself be swept up and blanked by the very redaction it's meant to
     replace)."""
     page_rotations = page_rotations or {}
->>>>>>> feature/screen-map
     with pymupdf.open(stream=source_bytes, filetype="pdf") as pdf:
         by_page: dict[int, list] = {}
         for entity in entities:
@@ -127,38 +113,19 @@ def build_redacted_pdf(source_bytes: bytes, entities, page_rotations: dict[int, 
                 continue
             by_page.setdefault(entity.page, []).append(entity)
 
-<<<<<<< HEAD
-=======
         pending_text = []  # (page_number, origin, text, angle) — drawn after apply_redactions()
 
->>>>>>> feature/screen-map
         for page_number, page_entities in by_page.items():
             if page_number < 1 or page_number > pdf.page_count:
                 continue
             page = pdf[page_number - 1]
-<<<<<<< HEAD
-=======
             angle = page_rotations.get(page_number, 0.0)
             rotated = abs(angle) >= _MIN_ROTATION_DEGREES
->>>>>>> feature/screen-map
             for entity in page_entities:
                 if not entity.boxes:
                     continue
                 replacement = _replacement_text(entity)
                 is_redact = entity.mode == "redact"
-<<<<<<< HEAD
-                for index, box in enumerate(entity.boxes):
-                    rect = pymupdf.Rect(box["x0"], box["top"], box["x1"], box["bottom"])
-                    page.add_redact_annot(
-                        rect,
-                        text=replacement if index == 0 else None,
-                        fontname="helv",
-                        fontsize=8,
-                        fill=(0, 0, 0) if is_redact else (1, 1, 1),
-                        text_color=(1, 1, 1) if is_redact else (0, 0, 0),
-                        cross_out=False,
-                    )
-=======
                 fill = (0, 0, 0) if is_redact else (1, 1, 1)
                 text_color = (1, 1, 1) if is_redact else (0, 0, 0)
                 for index, box in enumerate(entity.boxes):
@@ -184,13 +151,10 @@ def build_redacted_pdf(source_bytes: bytes, entities, page_rotations: dict[int, 
                             text_color=text_color,
                             cross_out=False,
                         )
->>>>>>> feature/screen-map
 
         for page in pdf:
             page.apply_redactions(images=pymupdf.PDF_REDACT_IMAGE_PIXELS)
 
-<<<<<<< HEAD
-=======
         for page_number, origin, text, angle in pending_text:
             page = pdf[page_number - 1]
             # Only "mask"/"pseudo" tokens ever reach here (a "redact" entity
@@ -202,7 +166,6 @@ def build_redacted_pdf(source_bytes: bytes, entities, page_rotations: dict[int, 
                 color=(0, 0, 0), morph=(origin, pymupdf.Matrix(angle)),
             )
 
->>>>>>> feature/screen-map
         # A source PDF's metadata/XML metadata can itself carry PHI (author,
         # title, custom fields set by the EHR that exported it).
         pdf.set_metadata({})

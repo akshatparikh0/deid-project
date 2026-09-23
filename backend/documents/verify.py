@@ -40,10 +40,6 @@ def _word_boundary_pattern(value: str) -> re.Pattern[str]:
     return re.compile(rf"\b{re.escape(value)}\b")
 
 
-<<<<<<< HEAD
-def verify_redacted_pdf(pdf_bytes, entities, ai_detectors, min_confidence=0.85):
-    """Returns a list of finding dicts; empty means verification passed."""
-=======
 def verify_redacted_pdf(pdf_bytes, entities, ai_detectors, min_confidence=0.85, force_ocr=False):
     """Returns a list of finding dicts; empty means verification passed.
 
@@ -60,7 +56,6 @@ def verify_redacted_pdf(pdf_bytes, entities, ai_detectors, min_confidence=0.85, 
     value at the moment it matters most. Forcing OCR here removes that
     blind spot: the underlying image gets re-read regardless of how much
     native token text now sits on top of it."""
->>>>>>> feature/screen-map
     kept_categories = {e.category for e in entities if e.mode == "keep"}
     surrogate_texts = {
         e.surrogate_value.strip().casefold()
@@ -73,11 +68,7 @@ def verify_redacted_pdf(pdf_bytes, entities, ai_detectors, min_confidence=0.85, 
         if e.mode != "keep" and e.value.strip()
     }
 
-<<<<<<< HEAD
-    _, blocks, _ = extract_blocks(io.BytesIO(pdf_bytes))
-=======
     _, blocks, _ = extract_blocks(io.BytesIO(pdf_bytes), force_ocr=force_ocr)
->>>>>>> feature/screen-map
 
     findings = []
     for block in blocks:

@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('documents', '0007_alter_categoryrule_category_and_more'),
+        ('documents', '0009_alter_foldercategoryrule_category_max_length'),
     ]
 
     operations = [

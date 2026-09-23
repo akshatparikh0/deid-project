@@ -22,17 +22,11 @@ export function routeForJobStatus(
     case 'complete':
       return paths.jobAudit.getHref(id);
     case 'failed':
-<<<<<<< HEAD
-      if (batchId != null) return `/uploads/${batchId}/status`;
-      return (entityCount ?? 0) > 0 ? `/jobs/${id}/review` : null;
+      if (batchId != null) return paths.uploadStatus.getHref(batchId);
+      return (entityCount ?? 0) > 0 ? paths.jobReview.getHref(id) : null;
     case 'scanning':
     case 'queued':
-      return batchId != null ? `/uploads/${batchId}/status` : `/jobs/${id}/rules`;
-=======
-      return batchId != null ? paths.uploadStatus.getHref(batchId) : null;
-    case 'scanning':
       return batchId != null ? paths.uploadStatus.getHref(batchId) : paths.jobRules.getHref(id);
->>>>>>> feature/screen-map
     case 'in_review':
     case 'finalizing':
     default:

@@ -8,7 +8,6 @@ from .categories import CATEGORY_META, CATEGORY_ORDER
 from .complete import VerificationError, complete_job
 from .export import build_export, content_type_for
 from .models import CategoryRule, Entity, ExportArtifact, Folder, FolderCategoryRule, Job, Page, UploadBatch
-from .tasks import ingest_job
 from .payload import build_document_payload
 from .serializers import (
     BatchUploadSerializer,
@@ -178,14 +177,11 @@ class JobListCreateView(APIView):
         )
         job.file.save(data["file"].name, data["file"], save=True)
 
-<<<<<<< HEAD
         # Synchronous in-process (default, no broker configured) or a real
         # queued worker job (CELERY_BROKER_URL set) — see tasks.py. Either
         # way the job is "queued" until a worker picks it up, matching
         # Job.status's original intent for this state.
-=======
         seed_stages(job)
->>>>>>> feature/screen-map
         ingest_job.delay(job.id)
 
         job.refresh_from_db()
@@ -403,11 +399,7 @@ class JobCompleteView(APIView):
             # The source file and every DB row up to this point are
             # untouched — the job goes to "failed" rather than "complete"
             # so a partially- or unverifiably-redacted document is never
-<<<<<<< HEAD
             # delivered (FR-81, AC-25).
-=======
-            # delivered.
->>>>>>> feature/screen-map
             job.status = "failed"
             job.error_message = str(exc)
             job.save(update_fields=["status", "error_message"])
@@ -432,14 +424,9 @@ class JobAuditView(APIView):
         job = _job_or_404(job_id)
         audit_records = list(job.audit_records.all())
         if audit_records:
-<<<<<<< HEAD
             # The permanent, immutable trail written once at finalization
             # (NFR-16) — what actually shipped, not the still-editable
             # in-review state.
-=======
-            # The permanent, immutable trail written once at finalization —
-            # what actually shipped, not the still-editable in-review state.
->>>>>>> feature/screen-map
             rows = [
                 {
                     "entity_code": r.entity_code, "category": r.category, "value_hash": r.value_hash,

@@ -243,8 +243,4 @@ BLOCK_SOURCE_CHOICES = [
     ("text", "Text layer"),
     ("tesseract", "Tesseract OCR"),
     ("azure_ocr", "Azure Document Intelligence"),
-<<<<<<< HEAD
 ]
-=======
-]
->>>>>>> feature/screen-map
