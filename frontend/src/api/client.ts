@@ -147,6 +147,15 @@ export interface CreateBatchParams {
 export function createUploadBatch(params: CreateBatchParams): Promise<CreateBatchResponse> {
   const form = new FormData();
   params.files.forEach((file) => form.append('files', file));
+  // webkitRelativePath (set on files picked via a folder input) carries the
+  // subfolder path — FormData/multipart only transmits each file's
+  // basename, so it has to be sent separately, in the same order as
+  // 'files', for the backend to tell same-named files in different
+  // subfolders apart.
+  params.files.forEach((file) => {
+    const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath;
+    form.append('paths', relativePath || file.name);
+  });
   if (params.uploaded_by) form.append('uploaded_by', params.uploaded_by);
   if (params.department) form.append('department', params.department);
   form.append('folder', String(params.folder));

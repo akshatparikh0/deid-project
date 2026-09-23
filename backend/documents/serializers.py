@@ -193,6 +193,12 @@ class JobWithStagesSerializer(JobSerializer):
 
 class BatchUploadSerializer(serializers.Serializer):
     files = serializers.ListField(child=serializers.FileField(), allow_empty=False)
+    # Each file's webkitRelativePath (e.g. "Smith/report.pdf") when the
+    # upload came from a folder picker, in the same order as `files` —
+    # multipart only carries each file's basename, so the frontend sends
+    # this separately. Optional/order-matched rather than required so a
+    # plain multi-file upload (no folder involved) still works.
+    paths = serializers.ListField(child=serializers.CharField(allow_blank=True), required=False, default=list)
     uploaded_by = serializers.CharField(required=False, allow_blank=True, max_length=120, default="")
     department = serializers.CharField(required=False, allow_blank=True, max_length=120, default="")
     folder = serializers.PrimaryKeyRelatedField(queryset=Folder.objects.all())

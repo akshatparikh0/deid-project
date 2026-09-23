@@ -211,17 +211,27 @@ class UploadBatchListCreateView(APIView):
             preset=data.get("preset", "mask"),
         )
 
+        paths = data.get("paths") or []
+
         rejected = []
-        for f in data["files"]:
+        for i, f in enumerate(data["files"]):
+            # Falls back to the plain basename when no relative path was
+            # sent (a non-folder multi-file upload) or the lists don't
+            # line up. Preserves the subfolder path (e.g. "Smith/report.pdf")
+            # so same-named files from different subfolders of an uploaded
+            # folder stay distinguishable — see Folder's docstring for why
+            # this is display-only metadata rather than a new Folder node.
+            relative_path = paths[i] if i < len(paths) and paths[i] else f.name
+
             if not f.name.lower().endswith(".pdf"):
-                rejected.append({"filename": f.name, "reason": "Only PDF files are supported."})
+                rejected.append({"filename": relative_path, "reason": "Only PDF files are supported."})
                 continue
             if f.size > _MAX_UPLOAD_BYTES:
-                rejected.append({"filename": f.name, "reason": "File exceeds the 50 MB limit."})
+                rejected.append({"filename": relative_path, "reason": "File exceeds the 50 MB limit."})
                 continue
 
             job = Job.objects.create(
-                filename=f.name,
+                filename=relative_path,
                 batch=batch,
                 folder=batch.folder,
                 uploaded_by=batch.uploaded_by,

@@ -76,10 +76,19 @@ export function UploadPage() {
   }, [folder]);
 
   // Browsers only expose folder-select via this non-standard attribute, and
-  // React has no typed JSX prop for it — it has to be set on the DOM node.
-  useEffect(() => {
-    folderInputRef.current?.setAttribute('webkitdirectory', '');
-  }, []);
+  // React has no typed JSX prop for it — it has to be set on the DOM node
+  // itself. A callback ref (rather than an effect) ensures it's applied the
+  // moment the input actually mounts, since this page's early-return loading
+  // state means the input isn't present on first render.
+  function setFolderInputRef(el: HTMLInputElement | null) {
+    folderInputRef.current = el;
+    el?.setAttribute('webkitdirectory', '');
+  }
+
+  function fileKey(f: File): string {
+    const relativePath = (f as File & { webkitRelativePath?: string }).webkitRelativePath;
+    return relativePath ? `${relativePath}:${f.size}` : `${f.name}:${f.size}`;
+  }
 
   function pickFiles(list: FileList | File[] | null | undefined) {
     if (!list) return;
@@ -88,10 +97,10 @@ export function UploadPage() {
     const skippedNames = incoming.filter((f) => !isPdf(f)).map((f) => f.name);
 
     setFiles((prev) => {
-      const seen = new Set(prev.map((f) => `${f.name}:${f.size}`));
+      const seen = new Set(prev.map(fileKey));
       const merged = [...prev];
       for (const f of validOnes) {
-        const key = `${f.name}:${f.size}`;
+        const key = fileKey(f);
         if (!seen.has(key)) {
           seen.add(key);
           merged.push(f);
@@ -200,7 +209,7 @@ export function UploadPage() {
               hidden
               onChange={(e) => pickFiles(e.target.files)}
             />
-            <input ref={folderInputRef} type="file" multiple hidden onChange={(e) => pickFiles(e.target.files)} />
+            <input ref={setFolderInputRef} type="file" multiple hidden onChange={(e) => pickFiles(e.target.files)} />
             <FileText className="text-muted-foreground mx-auto mb-2.5 size-9" strokeWidth={1.25} aria-hidden="true" />
             {files.length > 0 ? (
               <>
