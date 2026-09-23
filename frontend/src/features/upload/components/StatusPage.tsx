@@ -141,6 +141,11 @@ export function StatusPage() {
             ? `All ${batch.total} file${batch.total === 1 ? '' : 's'} processed.`
             : `Processing ${batch.finished} of ${batch.total} file${batch.total === 1 ? '' : 's'}…`
         }
+        actions={
+          <Button variant="outline" size="sm" onClick={() => navigate(paths.queue.getHref(batch.folder))}>
+            View in library
+          </Button>
+        }
       />
 
       {error && <ErrorBanner message={error} />}
@@ -148,7 +153,7 @@ export function StatusPage() {
       <Progress value={progressPct} className="h-1.5" />
 
       <Card className="mt-5 gap-0 py-0">
-        {batch.jobs.map((job) => {
+        {[...batch.jobs].reverse().map((job) => {
           const canReview = job.status === 'in_review' || job.status === 'complete';
           return (
             <div
