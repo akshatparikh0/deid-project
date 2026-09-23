@@ -29,7 +29,7 @@ from .serializers import (
     UploadBatchSerializer,
     UploadSerializer,
 )
-from .tasks import seed_stages, submit_job
+from .tasks import ingest_job, seed_stages
 
 
 def _job_or_404(job_id):
@@ -178,10 +178,14 @@ class JobListCreateView(APIView):
         )
         job.file.save(data["file"].name, data["file"], save=True)
 
+<<<<<<< HEAD
         # Synchronous in-process (default, no broker configured) or a real
         # queued worker job (CELERY_BROKER_URL set) — see tasks.py. Either
         # way the job is "queued" until a worker picks it up, matching
         # Job.status's original intent for this state.
+=======
+        seed_stages(job)
+>>>>>>> feature/screen-map
         ingest_job.delay(job.id)
 
         job.refresh_from_db()
@@ -231,7 +235,7 @@ class UploadBatchListCreateView(APIView):
             )
             job.file.save(f.name, f, save=True)  # "ingest" stage — must stay synchronous (see tasks.seed_stages)
             seed_stages(job)
-            submit_job(job.id)
+            ingest_job.delay(job.id)
 
         if not batch.jobs.exists():
             batch.delete()
@@ -255,7 +259,7 @@ class JobRetryView(APIView):
         job.error_message = None
         job.save(update_fields=["status", "error_message"])
         seed_stages(job)
-        submit_job(job.id)
+        ingest_job.delay(job.id)
         return Response({"job": JobSerializer(job).data}, status=202)
 
 
@@ -399,7 +403,11 @@ class JobCompleteView(APIView):
             # The source file and every DB row up to this point are
             # untouched — the job goes to "failed" rather than "complete"
             # so a partially- or unverifiably-redacted document is never
+<<<<<<< HEAD
             # delivered (FR-81, AC-25).
+=======
+            # delivered.
+>>>>>>> feature/screen-map
             job.status = "failed"
             job.error_message = str(exc)
             job.save(update_fields=["status", "error_message"])
@@ -424,9 +432,14 @@ class JobAuditView(APIView):
         job = _job_or_404(job_id)
         audit_records = list(job.audit_records.all())
         if audit_records:
+<<<<<<< HEAD
             # The permanent, immutable trail written once at finalization
             # (NFR-16) — what actually shipped, not the still-editable
             # in-review state.
+=======
+            # The permanent, immutable trail written once at finalization —
+            # what actually shipped, not the still-editable in-review state.
+>>>>>>> feature/screen-map
             rows = [
                 {
                     "entity_code": r.entity_code, "category": r.category, "value_hash": r.value_hash,

@@ -34,11 +34,14 @@ export type Category =
 
 export type Mode = 'redact' | 'mask' | 'pseudo' | 'keep';
 
+<<<<<<< HEAD
 // "queued": uploaded, waiting for a worker to pick it up (async processing
 // — see the backend's Celery integration; with no broker configured this
 // state is typically instantaneous). "finalizing": completion requested,
 // running true-PDF-redaction + second-pass verification — also normally
 // instantaneous, but a real state a client can poll/show a spinner for.
+=======
+>>>>>>> feature/screen-map
 export type JobStatus = 'queued' | 'scanning' | 'in_review' | 'finalizing' | 'complete' | 'failed';
 
 export type StageName = 'ingest' | 'parse' | 'detect' | 'transform' | 'finalize';
@@ -136,9 +139,13 @@ export interface DocumentBlock {
   index: number;
   page: number;
   type: 'title' | 'sub' | 'h' | 'p' | 'table_row';
+<<<<<<< HEAD
   // 'tesseract' / 'azure_ocr' = OCR fallback tiers for a page with no
   // usable native text layer, tried in that order.
   source: 'text' | 'tesseract' | 'azure_ocr';
+=======
+  source: 'text' | 'tesseract' | 'azure_ocr'; // OCR fallback tiers for a page with no native text layer
+>>>>>>> feature/screen-map
   parts: BlockPart[];
 }
 

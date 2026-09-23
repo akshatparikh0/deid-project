@@ -1,4 +1,5 @@
 """
+<<<<<<< HEAD
 Two independent async mechanisms currently coexist here, from two branches
 that each added background processing without knowing about the other:
 
@@ -16,13 +17,22 @@ design choice — consolidating on one of the two (most likely: point the
 thread-pool call sites at ingest_job.delay() instead) is follow-up work,
 not done here so neither branch's already-working feature broke in the
 merge.
+=======
+Runs each job's pipeline (ingest.run_ingestion) as a Celery task so the
+upload request can return immediately and many files can process at once.
+With no broker configured, CELERY_TASK_ALWAYS_EAGER runs the task
+synchronously in-process (see deid_backend/settings.py) — same zero-setup
+local-dev behavior as before, but a real broker/worker can be pointed at in
+production without any code change here.
+>>>>>>> feature/screen-map
 """
 import logging
-import os
-from concurrent.futures import ThreadPoolExecutor
 
 from celery import shared_task
+<<<<<<< HEAD
 from django.db import close_old_connections
+=======
+>>>>>>> feature/screen-map
 from django.utils import timezone
 
 from .categories import STAGE_ORDER
@@ -31,17 +41,11 @@ from .models import Job, JobStage
 
 logger = logging.getLogger(__name__)
 
-# OCR/extraction is CPU- and memory-heavy per file, and SQLite (even in WAL
-# mode) still serializes writes — a small pool keeps a typical box responsive
-# to Status-page polling while several files progress in parallel.
-MAX_WORKERS = int(os.environ.get("INGEST_MAX_WORKERS", "3"))
-_executor = ThreadPoolExecutor(max_workers=MAX_WORKERS, thread_name_prefix="ingest")
-
 
 def seed_stages(job):
     """(Re)creates job's stage rows: 'ingest' is already done by the time
     this is called (the file is saved synchronously in the request), the
-    rest start 'pending' until the worker thread picks the job up."""
+    rest start 'pending' until the worker picks the job up."""
     now = timezone.now()
     JobStage.objects.filter(job=job).delete()
     JobStage.objects.bulk_create([
@@ -52,12 +56,8 @@ def seed_stages(job):
     ])
 
 
-def submit_job(job_id):
-    _executor.submit(_process, job_id)
-
-
-def _process(job_id):
-    close_old_connections()
+@shared_task(name="documents.ingest_job")
+def ingest_job(job_id):
     try:
         job = Job.objects.select_related("folder").get(pk=job_id)
         with job.file.open("rb") as fh:
@@ -71,6 +71,7 @@ def _process(job_id):
         JobStage.objects.filter(job_id=job_id, status="running").update(
             status="failed", finished_at=timezone.now(), error_message="Unexpected server error.",
         )
+<<<<<<< HEAD
     finally:
         close_old_connections()
 
@@ -81,3 +82,5 @@ def ingest_job(job_id):
     with job.file.open("rb") as fh:
         run_ingestion(job, fh)
     return job.status
+=======
+>>>>>>> feature/screen-map

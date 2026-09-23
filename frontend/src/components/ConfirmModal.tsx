@@ -1,6 +1,15 @@
 import { useState } from 'react';
-import { ApiError } from '../api/client';
-import { ErrorBanner } from './States';
+import { ApiError } from '@/api/client';
+import { ErrorBanner } from '@/components/States';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 export function ConfirmModal({
   title,
@@ -33,26 +42,22 @@ export function ConfirmModal({
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-panel" style={{ maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
-        <h2 className="modal-title">{title}</h2>
-        <p className="page-subtitle" style={{ marginTop: 8 }}>
-          {message}
-        </p>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-105">
+        <DialogHeader>
+          <DialogTitle className="font-serif text-[19px]">{title}</DialogTitle>
+          <DialogDescription>{message}</DialogDescription>
+        </DialogHeader>
         {error && <ErrorBanner message={error} />}
-        <div className="modal-actions">
-          <button className="btn" onClick={onClose} disabled={submitting}>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={submitting}>
             Cancel
-          </button>
-          <button
-            className={`btn ${danger ? 'btn-danger' : 'btn-primary'}`}
-            onClick={submit}
-            disabled={submitting}
-          >
+          </Button>
+          <Button variant={danger ? 'destructive' : 'default'} onClick={submit} disabled={submitting}>
             {submitting ? 'Working…' : confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -7,11 +7,18 @@ bounding boxes so the Review screen can draw redaction/highlight boxes on
 the real rendered page image), one Page row per page image, and seed one
 CategoryRule per canonical Safe Harbor category.
 
+<<<<<<< HEAD
 Runs on a background thread or a Celery task (see tasks.py), advancing
 job.status through the parse/detect/transform/finalize stages
 (categories.STAGE_ORDER) and recording each one's start/finish on a
 JobStage row so the Status page can poll live per-stage progress and
 timing for many jobs at once.
+=======
+Runs as a Celery task (see tasks.py), advancing job.status through the
+parse/detect/transform/finalize stages (categories.STAGE_ORDER) and recording
+each one's start/finish on a JobStage row so the Status page can poll live
+per-stage progress and timing for many jobs at once.
+>>>>>>> feature/screen-map
 """
 import logging
 
@@ -37,10 +44,39 @@ def _line_group_boxes(words, start, end):
     """Given a block's per-word position metadata and a detected span's
     character range, returns one box per visual line the span touches — a
     span wrapped across two lines gets two boxes rather than one box
-    spanning (and over-covering) the gap between them."""
+    spanning (and over-covering) the gap between them.
+
+    Words carry a "line_key" marking which of the block's own already-
+    correctly-clustered physical lines they came from (see
+    extraction.py's _group_words_into_lines/_group_lines_into_blocks) —
+    grouping by that instead of re-deriving line boundaries from raw
+    top-coordinates a second time matters on a skewed scan, where a single
+    line's words can land more than _LINE_TOLERANCE apart vertically:
+    re-clustering by tolerance alone would fragment one true line into
+    several undersized boxes, or bleed two adjacent lines into one
+    oversized box that then overlaps neighboring text once finalize.py
+    draws (and, for a rotated page, rotates) it."""
     covering = [w for w in words if w["start"] < end and w["end"] > start]
     if not covering:
         return []
+    if all("line_key" in w for w in covering):
+        grouped = {}
+        order = []
+        for w in covering:
+            key = w["line_key"]
+            if key not in grouped:
+                grouped[key] = []
+                order.append(key)
+            grouped[key].append(w)
+        lines = []
+        for key in order:
+            group = grouped[key]
+            lines.append({
+                "x0": min(w["x0"] for w in group), "top": min(w["top"] for w in group),
+                "x1": max(w["x1"] for w in group), "bottom": max(w["bottom"] for w in group),
+            })
+        return sorted(lines, key=lambda l: l["top"])
+
     lines = []
     for w in sorted(covering, key=lambda w: w["top"]):
         if lines and abs(w["top"] - lines[-1]["top"]) <= _LINE_TOLERANCE:
@@ -135,11 +171,15 @@ def run_ingestion(job, file_obj):
     try:
         ai_detectors = build_detectors(settings)
 
+<<<<<<< HEAD
         validate_pdf(
             file_obj,
             filename=getattr(file_obj, "name", job.filename),
         )
 
+=======
+        validate_pdf(file_obj, filename=getattr(file_obj, "name", job.filename))
+>>>>>>> feature/screen-map
         file_obj.seek(0)
 
         page_count, raw_blocks, raw_pages = extract_blocks(
@@ -199,7 +239,10 @@ def run_ingestion(job, file_obj):
             job.save(update_fields=["pages", "status", "error_message"])
 
             for raw_page in raw_pages:
-                page = Page(job=job, number=raw_page["number"], width=raw_page["width"], height=raw_page["height"])
+                page = Page(
+                    job=job, number=raw_page["number"], width=raw_page["width"], height=raw_page["height"],
+                    rotation=raw_page.get("rotation", 0.0),
+                )
                 page.image.save(f"page-{raw_page['number']}.png", ContentFile(raw_page["png"]), save=False)
                 page.save()
 
@@ -218,9 +261,13 @@ def run_ingestion(job, file_obj):
                     # reviewable Entity (never silently dropped), it just
                     # defaults to "keep" instead of the job's preset mode, so
                     # a low-confidence guess doesn't change the document
+<<<<<<< HEAD
                     # until a reviewer confirms it (AC-13). The auto-apply
                     # step below (for jobs with no manual review checkpoint)
                     # is scoped to respect this same floor.
+=======
+                    # until a reviewer confirms it (AC-13).
+>>>>>>> feature/screen-map
                     default_mode = job.preset if span["confidence"] >= job.confidence_threshold else "keep"
                     Entity.objects.create(
                         job=job, block=block, code=f"E-{entity_seq:02d}",

@@ -1,4 +1,4 @@
-import type { Folder } from '../api/types';
+import type { Folder } from '@/api/types';
 
 export function pathTo(folders: Folder[], id: number | null): Folder[] {
   const path: Folder[] = [];

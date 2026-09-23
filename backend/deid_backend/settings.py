@@ -219,12 +219,19 @@ REDACTION_FORCE_OCR = (
     os.environ.get("REDACTION_FORCE_OCR", "False").lower() == "true"
 )
 
+<<<<<<< HEAD
 # --- Async processing (FR-56/FR-57) -----------------------------------
 # No broker configured -> every Celery task runs synchronously in-process
 # (CELERY_TASK_ALWAYS_EAGER), identical to the original request-blocking
 # behavior — so local dev and the test suite need no extra services. Set
 # CELERY_BROKER_URL (redis://... for local/staging, or
 # azureservicebus://... in production, via kombu's transport) to run real
+=======
+# --- Async processing -------------------------------------------------
+# No broker configured -> every Celery task runs synchronously in-process
+# (CELERY_TASK_ALWAYS_EAGER), so local dev and the test suite need no extra
+# services. Set CELERY_BROKER_URL (e.g. redis://...) to run real
+>>>>>>> feature/screen-map
 # out-of-request workers; start one with `celery -A deid_backend worker`.
 CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "")
 CELERY_RESULT_BACKEND = os.environ.get("CELERY_RESULT_BACKEND", CELERY_BROKER_URL or None)
@@ -237,6 +244,7 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_DEFAULT_QUEUE = os.environ.get("CELERY_TASK_DEFAULT_QUEUE", "deid-ingest")
+<<<<<<< HEAD
 
 # --- Storage adapters (FR-67 – FR-75) ----------------------------------
 # One Django Storage backend per provider (django-storages), selected here
@@ -282,3 +290,5 @@ elif STORAGE_PROVIDER == "gcs":
     GS_BUCKET_NAME = os.environ.get("GS_BUCKET_NAME", "")
     GS_PROJECT_ID = os.environ.get("GCS_PROJECT_ID", "")
     GS_DEFAULT_ACL = None
+=======
+>>>>>>> feature/screen-map

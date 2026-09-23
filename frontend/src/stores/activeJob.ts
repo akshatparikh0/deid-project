@@ -1,0 +1,89 @@
+import type { Folder, Job, JobStatus } from '@/api/types';
+
+interface ActiveJobSnapshot {
+  id: number;
+  code: string;
+  classCount: number;
+  entityCount: number;
+  status: JobStatus;
+}
+
+interface ActiveFolderSnapshot {
+  id: number;
+  name: string;
+}
+
+let activeJob: ActiveJobSnapshot | null = null;
+let activeFolder: ActiveFolderSnapshot | null = null;
+let queueCount: number | null = null;
+/** Set once the user commits to uploading into a patient folder — either by
+ * clicking "Add document" in the document library, or by continuing from
+ * that folder's config rules page. Gates the "Upload file" sidebar link so
+ * it only lights up once a folder has actually been chosen for upload. */
+let uploadReadyFolderId: number | null = null;
+/** The most recently created/opened UploadBatch — gates the "Status" sidebar
+ * link the same way uploadReadyFolderId gates "Upload file". Set once a
+ * batch is created (UploadPage) or its Status page is opened (StatusPage). */
+let activeBatchId: number | null = null;
+const listeners = new Set<() => void>();
+
+function emit() {
+  listeners.forEach((listener) => listener());
+}
+
+export function setActiveJob(job: Job | null) {
+  activeJob = job
+    ? { id: job.id, code: job.code, classCount: job.class_count, entityCount: job.entity_count, status: job.status }
+    : null;
+  emit();
+}
+
+/** The patient folder currently being browsed in the document library —
+ * drives the "Config Rules" and "Upload file" sidebar links so they carry
+ * that folder forward without requiring the user to re-pick it. */
+export function setActiveFolder(folder: Folder | null) {
+  activeFolder = folder ? { id: folder.id, name: folder.name } : null;
+  uploadReadyFolderId = null;
+  activeBatchId = null;
+  emit();
+}
+
+export function setUploadReady(folderId: number) {
+  uploadReadyFolderId = folderId;
+  emit();
+}
+
+export function getUploadReadySnapshot() {
+  return uploadReadyFolderId;
+}
+
+export function setActiveBatch(batchId: number | null) {
+  activeBatchId = batchId;
+  emit();
+}
+
+export function getActiveBatchSnapshot() {
+  return activeBatchId;
+}
+
+export function setQueueCount(count: number) {
+  queueCount = count;
+  emit();
+}
+
+export function subscribeActiveJob(listener: () => void) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+export function getActiveJobSnapshot() {
+  return activeJob;
+}
+
+export function getActiveFolderSnapshot() {
+  return activeFolder;
+}
+
+export function getQueueCountSnapshot() {
+  return queueCount;
+}

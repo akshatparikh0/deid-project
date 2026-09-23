@@ -24,6 +24,7 @@ def _upload_file(name):
     return io.BytesIO(data), data
 
 
+<<<<<<< HEAD
 def _patient_folder():
     """A job can only be uploaded into a level-1 (patient) folder — one
     level below a level-0 project folder (see UploadSerializer.validate_folder)."""
@@ -31,16 +32,26 @@ def _patient_folder():
     return Folder.objects.create(name="Test Patient", parent=project)
 
 
+=======
+>>>>>>> feature/screen-map
 class FullWorkflowTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user(username="reviewer", password="pw123456!")
+<<<<<<< HEAD
+=======
+        project = Folder.objects.create(name="Project")
+        cls.patient_folder = Folder.objects.create(name="Patient", parent=project)
+>>>>>>> feature/screen-map
 
     def setUp(self):
         self.client = APIClient()
         token, _ = Token.objects.get_or_create(user=self.user)
         self.client.credentials(HTTP_AUTHORIZATION=f"Token {token.key}")
+<<<<<<< HEAD
         self.folder = _patient_folder()
+=======
+>>>>>>> feature/screen-map
 
     def test_unauthenticated_request_is_rejected(self):
         anon = APIClient()
@@ -51,12 +62,20 @@ class FullWorkflowTests(TestCase):
         buf, _ = _upload_file("consult_note.pdf")
         buf.name = "consult_note.pdf"
         resp = self.client.post(
+<<<<<<< HEAD
             "/api/jobs/", {"file": buf, "preset": "mask", "folder": self.folder.id}, format="multipart",
+=======
+            "/api/jobs/", {"file": buf, "preset": "mask", "folder": self.patient_folder.id}, format="multipart",
+>>>>>>> feature/screen-map
         )
         self.assertEqual(resp.status_code, 201, resp.data)
         # CELERY_TASK_ALWAYS_EAGER (no broker configured, the test default)
         # means ingestion has already run by the time the response comes
+<<<<<<< HEAD
         # back — the whole point of "queued" being a real, inspectable
+=======
+        # back — the whole point of "scanning" being a real, inspectable
+>>>>>>> feature/screen-map
         # status for a deployment that *does* have a broker.
         self.assertEqual(resp.data["job"]["status"], "in_review")
         job = Job.objects.get(pk=resp.data["job"]["id"])
@@ -66,7 +85,11 @@ class FullWorkflowTests(TestCase):
         buf, _ = _upload_file("consult_note.pdf")
         buf.name = "consult_note.pdf"
         create_resp = self.client.post(
+<<<<<<< HEAD
             "/api/jobs/", {"file": buf, "preset": "mask", "folder": self.folder.id}, format="multipart",
+=======
+            "/api/jobs/", {"file": buf, "preset": "mask", "folder": self.patient_folder.id}, format="multipart",
+>>>>>>> feature/screen-map
         )
         self.assertEqual(create_resp.status_code, 201, create_resp.data)
         job_id = create_resp.data["job"]["id"]
@@ -122,7 +145,11 @@ class FullWorkflowTests(TestCase):
     def test_upload_rejects_non_pdf(self):
         resp = self.client.post(
             "/api/jobs/",
+<<<<<<< HEAD
             {"file": io.BytesIO(b"not a pdf"), "preset": "mask", "folder": self.folder.id},
+=======
+            {"file": io.BytesIO(b"not a pdf"), "preset": "mask", "folder": self.patient_folder.id},
+>>>>>>> feature/screen-map
             format="multipart",
         )
         # DRF field validation on the .pdf extension check rejects this
@@ -140,21 +167,39 @@ class AsyncDispatchTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user(username="reviewer2", password="pw123456!")
+<<<<<<< HEAD
+=======
+        project = Folder.objects.create(name="Project")
+        cls.patient_folder = Folder.objects.create(name="Patient", parent=project)
+>>>>>>> feature/screen-map
 
     def test_job_is_dispatched_to_a_worker_not_run_inline(self):
         client = APIClient()
         token, _ = Token.objects.get_or_create(user=self.user)
         client.credentials(HTTP_AUTHORIZATION=f"Token {token.key}")
+<<<<<<< HEAD
         folder = _patient_folder()
 
         buf, _ = _upload_file("consult_note.pdf")
         buf.name = "consult_note.pdf"
         resp = client.post("/api/jobs/", {"file": buf, "preset": "mask", "folder": folder.id}, format="multipart")
+=======
+
+        buf, _ = _upload_file("consult_note.pdf")
+        buf.name = "consult_note.pdf"
+        resp = client.post(
+            "/api/jobs/", {"file": buf, "preset": "mask", "folder": self.patient_folder.id}, format="multipart",
+        )
+>>>>>>> feature/screen-map
         self.assertEqual(resp.status_code, 201, resp.data)
         # The task was queued, not executed inline — status is exactly what
         # Job.objects.create() left it as, since no worker is actually
         # consuming this in-memory queue in the test.
+<<<<<<< HEAD
         self.assertEqual(resp.data["job"]["status"], "queued")
+=======
+        self.assertEqual(resp.data["job"]["status"], "scanning")
+>>>>>>> feature/screen-map
 
         # A real worker picking up the queued message runs exactly this.
         job = Job.objects.get(pk=resp.data["job"]["id"])

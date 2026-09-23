@@ -161,6 +161,13 @@ class Page(models.Model):
     width = models.FloatField()
     height = models.FloatField()
     image = models.ImageField(upload_to="page_images/")
+    # Degrees of rotation/skew detected from OCR line geometry (0 for a
+    # native-text page, which is never skewed) — see extraction.py's
+    # _estimate_skew_angle. finalize.py uses this so a redaction box and its
+    # replacement token are drawn at the same angle as the scanned text they
+    # cover, instead of an axis-aligned box that either misses part of the
+    # tilted glyphs or bleeds into an unrelated neighboring line.
+    rotation = models.FloatField(default=0.0)
 
     class Meta:
         ordering = ["number"]
@@ -223,7 +230,7 @@ class FolderCategoryRule(models.Model):
     any document is uploaded into it. New jobs created under the folder seed
     their per-job CategoryRule rows from this (see ingest.run_ingestion)."""
     folder = models.ForeignKey(Folder, related_name="rules", on_delete=models.CASCADE)
-    category = models.CharField(max_length=16, choices=CATEGORY_CHOICES)
+    category = models.CharField(max_length=32, choices=CATEGORY_CHOICES)
     enabled = models.BooleanField(default=True)
     mode = models.CharField(max_length=16, choices=MODE_CHOICES, default="mask")
     token = models.CharField(max_length=40)
@@ -253,7 +260,11 @@ class AuditRecord(models.Model):
     these rows at the database level, same as every other per-job table;
     true database-enforced append-only (a Postgres REVOKE UPDATE/DELETE
     grant) is a deployment-time hardening step, not something the ORM layer
+<<<<<<< HEAD
     alone can guarantee — see infra/README.md."""
+=======
+    alone can guarantee."""
+>>>>>>> feature/screen-map
     job = models.ForeignKey(Job, related_name="audit_records", on_delete=models.CASCADE)
     entity_code = models.CharField(max_length=12)
     category = models.CharField(max_length=32, choices=CATEGORY_CHOICES)

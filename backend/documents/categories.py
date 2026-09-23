@@ -1,13 +1,12 @@
 """
 The category classes this tool detects and transforms. Most map 1:1 onto the
 18 HIPAA Safe Harbor identifier classes (45 CFR §164.514(b)(2)(i)); "name" is
-split into patient_name/physician_name/name (other person) for reviewer
-clarity even though Safe Harbor's "Names" identifier covers all three the
-same way, and "facility" (organization/institution name) is tracked
-alongside "geo" since it's routinely treated as identifying alongside
-geographic subdivisions even though it isn't its own numbered identifier.
-Order here is the canonical display order used by the /rules/ endpoint and
-mirrored by the frontend.
+split into patient_name/physician_name/person_name/guarantor_name for
+reviewer clarity even though Safe Harbor's "Names" identifier covers all of
+them the same way, and "facility"/"employer" (organization names) are
+tracked alongside geographic subdivisions even though they aren't their own
+numbered identifier. Order here is the canonical display order used by the
+/rules/ endpoint and mirrored by the frontend.
 """
 
 CATEGORY_ORDER = [
@@ -244,4 +243,8 @@ BLOCK_SOURCE_CHOICES = [
     ("text", "Text layer"),
     ("tesseract", "Tesseract OCR"),
     ("azure_ocr", "Azure Document Intelligence"),
+<<<<<<< HEAD
 ]
+=======
+]
+>>>>>>> feature/screen-map

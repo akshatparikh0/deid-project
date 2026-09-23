@@ -39,14 +39,34 @@ def complete_job(job):
     with job.file.open("rb") as fh:
         source_bytes = fh.read()
 
+<<<<<<< HEAD
     redacted_bytes = build_redacted_pdf(source_bytes, entities)
+=======
+    page_rotations = {p.number: p.rotation for p in job.page_images.all()}
+    redacted_bytes = build_redacted_pdf(source_bytes, entities, page_rotations)
+>>>>>>> feature/screen-map
 
     policy = load_policy()
     if policy.get("verify", True):
         ai_detectors = build_detectors(settings)
+<<<<<<< HEAD
         findings = verify_redacted_pdf(
             redacted_bytes, entities, ai_detectors,
             min_confidence=float(policy.get("verification_min_confidence", 0.85)),
+=======
+        # The redacted PDF's own inserted "[TOKEN]" text can, on a heavily
+        # redacted page, be enough native text on its own to make
+        # extract_blocks skip OCR — exactly the moment a scanned source's
+        # still-fully-visible underlying image most needs re-checking (see
+        # verify_redacted_pdf's docstring). Force it whenever this job's
+        # original extraction needed OCR in the first place, since that
+        # same source image is still sitting underneath the redaction here.
+        needs_ocr = job.blocks.filter(source__in=["tesseract", "azure_ocr"]).exists()
+        findings = verify_redacted_pdf(
+            redacted_bytes, entities, ai_detectors,
+            min_confidence=float(policy.get("verification_min_confidence", 0.85)),
+            force_ocr=needs_ocr,
+>>>>>>> feature/screen-map
         )
         ai_engines = {"azure_ai_language", "anthropic"}
         blocking = [f for f in findings if f.get("detector") not in ai_engines or f["reason"] == "original_value_survived"]

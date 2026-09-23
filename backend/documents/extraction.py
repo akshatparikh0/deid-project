@@ -18,9 +18,10 @@ needs cells kept row-aligned to reason about what a bare, unlabelled value
 in a "Name" or "MRN" column means. A table cell's bounding box is just its
 own cell rectangle, taken straight from pdfplumber's table-row geometry.
 
-Every page is rasterized once (see `PAGE_IMAGE_RESOLUTION`) to back the
+Every page is rasterized once (see `PREVIEW_RESOLUTION`) to back the
 Review screen's page image and, when a page has little or no usable native
-text, to run Tesseract OCR as a fallback; see `_ocr_words`. "Little" is
+text, to run Tesseract (and, if enabled, Azure Document Intelligence) OCR
+as a fallback; see `_ocr_words`/`_azure_ocr_words`. "Little" is
 deliberately not "zero": a page can have a handful of genuine text runs (a
 stray label, a border-line "table" pdfplumber mistook for real cells) while
 the actual visible content is vector-drawn glyphs or a background scan with
@@ -30,6 +31,10 @@ replaces the page's text if it finds *more* content than native extraction
 did, so a genuinely short page never gets worse by attempting OCR.
 """
 import io
+<<<<<<< HEAD
+=======
+import math
+>>>>>>> feature/screen-map
 import os
 import re
 import shutil
@@ -51,10 +56,11 @@ MIN_TESSERACT_CONFIDENCE = 20.0
 # pdfplumber's page.to_image() rasterizes via pdfium (libpdfium), which is
 # not safe to call from multiple threads of the same process at once — it
 # reliably segfaults the whole interpreter under concurrent use, which is
-# exactly what tasks.py's worker pool does (several jobs' 'parse' stage
-# running at the same time). Serializing the whole extract_blocks() call
-# below closes that hole; detection/transform/finalize for other jobs still
-# run concurrently, only PDF parsing itself queues up.
+# exactly what a Celery worker with more than one process/thread does
+# (several jobs' 'parse' stage running at the same time). Serializing the
+# whole extract_blocks() call below closes that hole; detection/transform/
+# finalize for other jobs still run concurrently, only PDF parsing itself
+# queues up.
 _PDFIUM_LOCK = threading.Lock()
 
 _TESSERACT_AVAILABLE = shutil.which("tesseract") is not None
@@ -81,12 +87,135 @@ def _classify_block(text, index, page_number):
     return "p"
 
 
+_COLUMN_GAP_THRESHOLD = 30.0  # points; a horizontal gap this large between
+# two consecutive words otherwise on the same line means they actually sit
+# in different columns of a form/label:value grid (e.g. a label ending and
+# an unrelated field's value starting several inches later on the same
+# printed row) — not just generously spaced prose. Ordinary word-to-word
+# gaps within a sentence, even fully-justified, run a few points at most.
+
+
+def _cluster_line(words):
+    return {
+        "words": words,
+        "top": min(w["top"] for w in words),
+        "bottom": max(w["bottom"] for w in words),
+        "x0": min(w["x0"] for w in words),
+        "x1": max(w["x1"] for w in words),
+    }
+
+
+def _split_line_columns(lines):
+    """Splits any line whose words jump by more than _COLUMN_GAP_THRESHOLD
+    into separate clusters, one per horizontal cluster — otherwise two
+    unrelated fields sitting at the same row height (common in a two-column
+    demographics grid with no detectable table structure, e.g. an OCR'd
+    scan) get concatenated into one nonsense block.
+
+    Returns (lines, form_runs): `lines` are single-cluster lines, unchanged,
+    fed to the normal paragraph grouping below. `form_runs` are maximal
+    consecutive runs of multi-cluster lines (a demographics grid's worth of
+    rows, say), each a list of rows, each row a list of clusters (word
+    lists) — routed to _emit_form_row_blocks instead, which treats them
+    exactly like a real vector-detected table's rows (one cell of text per
+    cluster, not one flattened string), because joining a row's clusters
+    into a single string is itself ambiguous: e.g. "Kwame Whitfield Granite
+    Peak Memorial Hospital" (a patient name cluster directly beside a
+    facility name cluster, no punctuation between them) reads exactly like
+    one long facility name, and there is no text-shape rule that can always
+    tell the two readings apart after the fact — keeping the clusters as
+    separate cells sidesteps the ambiguity instead of trying to resolve it."""
+    single_lines = []
+    form_runs = []
+    current_run = []
+
+    def end_run():
+        if current_run:
+            form_runs.append(current_run.copy())
+            current_run.clear()
+
+    for line in lines:
+        words = sorted(line["words"], key=lambda w: w["x0"])
+        clusters = [[words[0]]]
+        for prev, w in zip(words, words[1:]):
+            if w["x0"] - prev["x1"] > _COLUMN_GAP_THRESHOLD:
+                clusters.append([])
+            clusters[-1].append(w)
+        if len(clusters) == 1:
+            end_run()
+            single_lines.append({**line, "words": words})
+            continue
+        current_run.append(clusters)
+    end_run()
+    return single_lines, form_runs
+
+
+_MIN_SKEW_SAMPLES = 5  # below this, there isn't enough evidence to call a page "rotated"
+
+
+def _estimate_skew_angle(lines):
+    """Estimates a scanned page's rotation angle in degrees (the same sign
+    convention as pymupdf.Matrix(angle) and the quad rotation in
+    finalize.py — positive turns text clockwise in top-down page
+    coordinates) from OCR line geometry: for each detected line with at
+    least two words, the angle from its first word's vertical center to its
+    last gives one sample of the page's tilt; the median across all lines
+    is robust to a handful of noisy short lines. Returns 0.0 if there isn't
+    enough data to tell (e.g. too few multi-word lines — including on a
+    native-text page, which was never skewed in the first place and never
+    reaches this function)."""
+    samples = []
+    for line in lines:
+        words = sorted(line["words"], key=lambda w: w["x0"])
+        first, last = words[0], words[-1]
+        dx = last["x0"] - first["x0"]
+        if dx <= 0:
+            continue
+        dy = ((last["top"] + last["bottom"]) / 2) - ((first["top"] + first["bottom"]) / 2)
+        samples.append(math.degrees(math.atan2(dy, dx)))
+    if len(samples) < _MIN_SKEW_SAMPLES:
+        return 0.0
+    samples.sort()
+    return samples[len(samples) // 2]
+
+
 def _group_words_into_lines(words):
-    """Groups a reading-order word list into lines by vertical position.
-    Each line is {"words": [...], "top", "bottom", "x0", "x1"}."""
+    """Groups a reading-order word list into lines, then splits out any
+    line that actually spans multiple form columns (see
+    _split_line_columns). Returns (lines, form_runs, skew_angle) — see
+    _split_line_columns for what the first two hold, and
+    _estimate_skew_angle for the third.
+
+    OCR'd words (see _ocr_words) carry Tesseract's own (block, paragraph,
+    line) grouping from its internal layout analysis, which is skew-
+    tolerant — grouping instead by a simple vertical-position tolerance, as
+    the native-text path below does, breaks down on a rotated/skewed scan:
+    words on the same printed row can land tens of points apart vertically
+    (comparable to or bigger than the gap between two different rows),
+    scrambling adjacent rows together. Native-text words have no such
+    Tesseract grouping and don't need it — a PDF's own text layer reports
+    exact, reliable coordinates.
+
+    Each line (before column-splitting) is {"words": [...], "top",
+    "bottom", "x0", "x1"}."""
+    if words and "line_key" in words[0]:
+        grouped = {}
+        order = []
+        for w in words:
+            key = w["line_key"]
+            if key not in grouped:
+                grouped[key] = []
+                order.append(key)
+            grouped[key].append(w)
+        lines = [_cluster_line(grouped[key]) for key in order]
+        lines.sort(key=lambda l: l["top"])
+        skew_angle = _estimate_skew_angle(lines)
+        single_lines, form_runs = _split_line_columns(lines)
+        return single_lines, form_runs, skew_angle
+
     lines = []
     current = None
-    for w in words:
+    for w in sorted(words, key=lambda w: (round(w["top"]), w["x0"])):
         if current is not None and abs(w["top"] - current["top"]) <= _LINE_TOLERANCE:
             current["words"].append(w)
             current["top"] = min(current["top"], w["top"])
@@ -96,7 +225,8 @@ def _group_words_into_lines(words):
         else:
             current = {"words": [w], "top": w["top"], "bottom": w["bottom"], "x0": w["x0"], "x1": w["x1"]}
             lines.append(current)
-    return lines
+    single_lines, form_runs = _split_line_columns(lines)
+    return single_lines, form_runs, 0.0
 
 
 def _group_lines_into_blocks(lines, page_number, start_index, source):
@@ -133,6 +263,14 @@ def _group_lines_into_blocks(lines, page_number, start_index, source):
                 words_meta.append({
                     "start": cursor, "end": cursor + len(token),
                     "x0": w["x0"], "top": w["top"], "x1": w["x1"], "bottom": w["bottom"],
+                    # Which of this block's own already-correctly-clustered
+                    # physical lines (see _group_words_into_lines) this word
+                    # came from — _line_group_boxes (ingest.py) groups a
+                    # span's words back into per-line boxes using this,
+                    # instead of re-deriving line boundaries from raw
+                    # top-coordinates a second time (which breaks the same
+                    # way on a skewed scan as it did before that fix).
+                    "line_key": li,
                 })
                 cursor += len(token)
         text = "".join(parts)
@@ -161,12 +299,220 @@ def _group_lines_into_blocks(lines, page_number, start_index, source):
     return blocks, index
 
 
+def _looks_like_label(text):
+    """A short, digit-free phrase — the shape of a form field's own label
+    ("Legal name", "Date of birth", "City / State / ZIP"), as opposed to a
+    data value. Used to recognize a repeating label:value form (see
+    `_label_columns`), not to classify PHI itself. Bare punctuation tokens
+    ("/" in a label like "City / State / ZIP") don't count as words."""
+    text = (text or "").strip()
+    if not text or any(ch.isdigit() for ch in text):
+        return False
+    words = [w for w in text.split() if any(ch.isalpha() for ch in w)]
+    return 1 <= len(words) <= 4
+
+
+def _value_shape(text):
+    """A coarse bucket for a cell's value, used only to tell a heterogeneous
+    column (many different kinds of value — the signature of a form's
+    value column, one different field type per row) apart from a
+    homogeneous one (a real data column, e.g. every row the same kind of
+    thing: a name, a relation word, a drug name)."""
+    text = (text or "").strip()
+    if not text:
+        return "empty"
+    if "@" in text:
+        return "email"
+    if re.search(r"\b\d{1,2}/\d{1,2}/\d{2,4}\b|\b\d{4}-\d{2}-\d{2}\b", text):
+        return "date"
+    if re.search(r"\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}", text):
+        return "phone"
+    digit_count = sum(ch.isdigit() for ch in text)
+    if digit_count and digit_count >= max(2, len(text) // 3):
+        return "numeric"
+    words = text.split()
+    alpha_words = [w for w in words if w[:1].isalpha()]
+    if len(words) >= 2 and alpha_words and all(w[:1].isupper() for w in alpha_words):
+        return "name-like"
+    return "word"
+
+
+def _label_columns(rows):
+    """Column indices whose cells, across every data row (not just row 0),
+    are themselves short field-name-shaped phrases — the signature of a
+    repeating label:value form (a demographics grid with "Legal name" /
+    "Date of birth" / "Age" / ... running down one column, each row a
+    completely different field) rather than a genuine header naming a
+    column of homogeneous data below it (e.g. "MEDICATION" over a column of
+    actual drug names, or "Relation" over a column of relation words).
+    Confirmed by checking the *paired* column immediately to the right: a
+    real label column's values are a different kind of thing on every row
+    (a date, then a phone number, then an email, ...); a homogeneous data
+    column's values are all the same kind of thing."""
+    data_rows = rows[1:]
+    if not data_rows:
+        return set()
+    ncols = max(len(row) for row in rows)
+    label_cols = set()
+    for col in range(ncols - 1):
+        values = [(row[col] or "").strip() for row in data_rows if col < len(row)]
+        if not values:
+            continue
+        # A strict "every row" requirement means one OCR-garbled cell (e.g.
+        # "Account no." misread as ".") disqualifies an otherwise-obvious
+        # label column entirely — a strong majority is enough to trust the
+        # column's shape without being derailed by isolated OCR noise.
+        label_like = sum(1 for v in values if _looks_like_label(v))
+        if label_like < max(1, round(len(values) * 0.7)):
+            continue
+        paired_values = [(row[col + 1] or "").strip() for row in data_rows if col + 1 < len(row)]
+        shapes = {_value_shape(v) for v in paired_values if v}
+        if len(shapes) >= 3:
+            label_cols.add(col)
+    return label_cols
+
+
+def _cluster_cell(cluster):
+    text = " ".join(w["text"] for w in cluster)
+    bbox = (
+        min(w["x0"] for w in cluster), min(w["top"] for w in cluster),
+        max(w["x1"] for w in cluster), max(w["bottom"] for w in cluster),
+    )
+    return text, bbox
+
+
+def _row_looks_like_header(text_row):
+    """True if most of this row's non-empty cells look like field labels —
+    the signature of a genuine one-row header immediately followed by one
+    matching data row (e.g. "PATIENT NAME | DATE OF BIRTH | AGE | SEX" over
+    "Beatriz Kowalczyk | 07/24/1997 | 28 | Female"), a transposed-
+    spreadsheet section common in intake forms. This is a row-wise check,
+    a companion to _label_columns' column-wise one: _label_columns decides
+    whether a *column* is a repeating label across many data rows, which
+    can't tell a genuine header apart from a value that's merely short and
+    label-shaped too when there's only one data row underneath it to
+    compare against — this catches that case directly instead.
+
+    A repeating label:value grid row (e.g. "Legal name | Kwame Whitfield |
+    Medical record no. | 75405792", a demographics grid handled by
+    _label_columns instead) can cross the same overall threshold by
+    coincidence — a short, digit-free *value* like a name looks exactly
+    like a label by shape alone. What tells the two apart is alternation:
+    a real header has every cell label-shaped; a label:value row only has
+    every *other* cell label-shaped. Rejecting a row where even-position
+    cells are much more label-like than odd-position ones (or vice versa)
+    catches that even when the overall fraction alone would not."""
+    cells = [c for c in text_row if c.strip()]
+    if len(cells) < 2:
+        return False
+    label_like = sum(1 for c in cells if _looks_like_label(c))
+    if label_like < max(1, round(len(cells) * 0.6)):
+        return False
+    if len(text_row) >= 4:
+        evens = [c for i, c in enumerate(text_row) if i % 2 == 0 and c.strip()]
+        odds = [c for i, c in enumerate(text_row) if i % 2 == 1 and c.strip()]
+        if evens and odds:
+            even_frac = sum(1 for c in evens if _looks_like_label(c)) / len(evens)
+            odd_frac = sum(1 for c in odds if _looks_like_label(c)) / len(odds)
+            if abs(even_frac - odd_frac) >= 0.5:
+                return False
+    return True
+
+
+def _pair_header_rows(text_rows):
+    """Finds (header_row_index -> data_row_index) pairs: a row that looks
+    like a header (see _row_looks_like_header) immediately followed by a
+    row that doesn't. Returns a dict mapping the data row's index to the
+    header row's own cell texts, position-aligned by column."""
+    pairs = {}
+    i = 0
+    n = len(text_rows)
+    while i + 1 < n:
+        if _row_looks_like_header(text_rows[i]) and not _row_looks_like_header(text_rows[i + 1]):
+            pairs[i + 1] = text_rows[i]
+            i += 2
+        else:
+            i += 1
+    return pairs
+
+
+def _emit_form_row_blocks(form_runs, page_number, start_index, source):
+    """Turns the form_runs from _split_line_columns (maximal consecutive
+    runs of multi-cluster OCR lines) into table_row blocks exactly like a
+    real vector-detected table's rows (_table_row_block).
+
+    Two different header shapes get reconciled here: a repeating label:
+    value grid, where every row is its own different field with no genuine
+    header row at all (a demographics grid — handled by _label_columns,
+    the same fix already applied to real vector-detected tables in
+    _extract_tables), and a one-row header directly over one matching data
+    row (handled by _pair_header_rows). Rows already explained by a header
+    pairing are excluded from the _label_columns pass so a real header row
+    and its data row don't get miscounted as more samples of a repeating
+    grid.
+
+    Returns (blocks, next_index)."""
+    blocks = []
+    index = start_index
+    for run in form_runs:
+        text_rows = [[_cluster_cell(cluster)[0] for cluster in row] for row in run]
+        header_pairs = _pair_header_rows(text_rows)
+        paired_indices = set(header_pairs) | {h - 1 for h in header_pairs}
+        remaining_rows = [r for i, r in enumerate(text_rows) if i not in paired_indices]
+        label_cols = _label_columns(remaining_rows) if remaining_rows else set()
+        for row_index, (row, text_row) in enumerate(zip(run, text_rows)):
+            if row_index in header_pairs:
+                row_headers = header_pairs[row_index]
+            elif row_index in paired_indices:
+                row_headers = [""] * len(row)
+            else:
+                row_headers = [""] * len(row)
+                for col in label_cols:
+                    if col + 1 < len(row_headers):
+                        row_headers[col + 1] = text_row[col]
+            cells_meta = []
+            parts = []
+            cursor = 0
+            for i, cluster in enumerate(row):
+                if cursor > 0:
+                    parts.append(" | ")
+                    cursor += 3
+                text, bbox = _cluster_cell(cluster)
+                start = cursor
+                parts.append(text)
+                cursor += len(text)
+                cells_meta.append({
+                    "text": text, "start": start, "end": cursor,
+                    "header": row_headers[i] if i < len(row_headers) else "",
+                    "x0": bbox[0], "top": bbox[1], "x1": bbox[2], "bottom": bbox[3],
+                })
+            blocks.append({
+                "index": index, "page": page_number, "type": "table_row",
+                "text": "".join(parts), "source": source, "cells": cells_meta,
+            })
+            index += 1
+    return blocks, index
+
+
 def _extract_tables(page, table_bboxes_only=False):
     """Returns a list of tables, each a list of rows, each row a list of
     (cell_text, column_header, bbox) tuples, plus the table bounding boxes
     (so the caller can exclude that page area from word/paragraph extraction).
     `bbox` is the cell's own (x0, top, x1, bottom) — a table cell's box is
-    just its own cell rectangle."""
+    just its own cell rectangle.
+
+    Most tables here have a real header row naming homogeneous data columns
+    below it (e.g. a medication table: MEDICATION | DIRECTIONS | QUANTITY).
+    Some are a repeating label:value form instead — a demographics grid
+    where every row pairs a short field-name cell ("Legal name", "Date of
+    birth", "Attending") with its own value, and there's no row that's
+    actually different from the rest. Treating row 0 as a header for a form
+    like that would apply one row's field name to every other row's
+    completely different field (turning "Date of birth", "Payer",
+    "Attending" themselves into false PHI matches, while the real value
+    next to them — an account number, a payer name — goes unclassified) —
+    `_label_columns` detects that shape, and each value cell there gets its
+    own row's label as its column_header instead of row 0's."""
     tables_out = []
     bboxes = []
     try:
@@ -183,19 +529,28 @@ def _extract_tables(page, table_bboxes_only=False):
         bboxes.append(table.bbox)
         if table_bboxes_only:
             continue
+        label_cols = _label_columns(rows)
         headers = [(cell or "").strip() for cell in rows[0]]
         table_rows = []
-        for row, plumber_row in zip(rows, table.rows):
+        for row_num, (row, plumber_row) in enumerate(zip(rows, table.rows)):
+            if label_cols:
+                row_headers = [""] * len(row)
+                for col in label_cols:
+                    if col + 1 < len(row_headers):
+                        row_headers[col + 1] = (row[col] or "").strip()
+            else:
+                row_headers = ["" if row_num == 0 else h for h in headers]
             cells = []
             for i, cell in enumerate(row):
                 bbox = plumber_row.cells[i] if i < len(plumber_row.cells) and plumber_row.cells[i] else table.bbox
-                cells.append(((cell or "").strip(), headers[i] if i < len(headers) else "", bbox))
+                header = row_headers[i] if i < len(row_headers) else ""
+                cells.append(((cell or "").strip(), header, bbox))
             table_rows.append(cells)
         tables_out.append(table_rows)
     return tables_out, bboxes
 
 
-def _table_row_block(row_cells, index, page_number, is_header_row, source):
+def _table_row_block(row_cells, index, page_number, source):
     parts = []
     cells_meta = []
     cursor = 0
@@ -208,7 +563,7 @@ def _table_row_block(row_cells, index, page_number, is_header_row, source):
         cursor += len(cell_text)
         cells_meta.append({
             "text": cell_text, "start": start, "end": cursor,
-            "header": "" if is_header_row else header,
+            "header": header,
             "x0": bbox[0], "top": bbox[1], "x1": bbox[2], "bottom": bbox[3],
         })
     return {
@@ -256,6 +611,13 @@ def _ocr_words(image, resolution):
                 "x1": (left + width) * scale,
                 "bottom": (top + height) * scale,
                 "confidence": confidence / 100.0,
+<<<<<<< HEAD
+=======
+                # Tesseract's own line grouping, from its internal layout
+                # analysis — see _group_words_into_lines for why this is
+                # used instead of re-deriving lines from raw coordinates.
+                "line_key": (data["block_num"][index], data["par_num"][index], data["line_num"][index]),
+>>>>>>> feature/screen-map
             }
         )
     return words
@@ -321,7 +683,7 @@ def extract_blocks(file_obj, *, force_ocr=False, azure_ocr_enabled=False):
     - pages is a list of {number, width, height, png} — one rasterized
       preview image per page, in the same coordinate space as the boxes
       above (width/height in PDF points; png is PNG bytes at
-      PAGE_IMAGE_RESOLUTION dpi).
+      PREVIEW_RESOLUTION dpi).
 
     Raises ExtractionError with a human-readable message if the PDF has no
     extractable text even after the OCR fallback (e.g. it's blank, corrupt,
@@ -362,6 +724,19 @@ def extract_blocks(file_obj, *, force_ocr=False, azure_ocr_enabled=False):
                         words = ocr_words
                         tables = []
                         source = "tesseract"
+<<<<<<< HEAD
+
+                    # Tesseract still came up short (or isn't installed) —
+                    # try Azure Document Intelligence as a last resort
+                    # before accepting a possibly-blank page.
+                    if azure_ocr_enabled and len(words) < _MIN_NATIVE_WORDS:
+                        azure_words = _azure_ocr_words(ocr_image, page.width, page.height)
+                        if len(azure_words) > len(words):
+                            words = azure_words
+                            tables = []
+                            source = "azure_ocr"
+=======
+>>>>>>> feature/screen-map
 
                     # Tesseract still came up short (or isn't installed) —
                     # try Azure Document Intelligence as a last resort
@@ -373,20 +748,23 @@ def extract_blocks(file_obj, *, force_ocr=False, azure_ocr_enabled=False):
                             tables = []
                             source = "azure_ocr"
 
-                lines = _group_words_into_lines(sorted(words, key=lambda w: (round(w["top"]), w["x0"])))
+                lines, form_runs, skew_angle = _group_words_into_lines(words)
                 page_blocks, index = _group_lines_into_blocks(lines, page_number, index, source)
                 blocks.extend(page_blocks)
 
+                form_blocks, index = _emit_form_row_blocks(form_runs, page_number, index, source)
+                blocks.extend(form_blocks)
+
                 for table in tables:
-                    for row_num, row_cells in enumerate(table):
-                        blocks.append(_table_row_block(row_cells, index, page_number, row_num == 0, source))
+                    for row_cells in table:
+                        blocks.append(_table_row_block(row_cells, index, page_number, source))
                         index += 1
 
                 png_buf = io.BytesIO()
                 preview_image.save(png_buf, format="PNG")
                 pages.append({
                     "number": page_number, "width": page.width, "height": page.height,
-                    "png": png_buf.getvalue(),
+                    "png": png_buf.getvalue(), "rotation": skew_angle,
                 })
     except ExtractionError:
         raise
@@ -397,6 +775,7 @@ def extract_blocks(file_obj, *, force_ocr=False, azure_ocr_enabled=False):
         raise ExtractionError(f"Could not parse this PDF: {message}") from exc
 
     if not blocks:
+<<<<<<< HEAD
         if not blocks:
             if not _TESSERACT_AVAILABLE:
                 hint = (
@@ -412,4 +791,20 @@ def extract_blocks(file_obj, *, force_ocr=False, azure_ocr_enabled=False):
                 "No extractable text was found. The PDF may be blank or "
                 f"contain an unreadable scanned image.{hint}"
             )
+=======
+        if not _TESSERACT_AVAILABLE:
+            hint = (
+                " Tesseract OCR is not installed, so image-only pages "
+                "could not be processed."
+            )
+        else:
+            hint = (
+                " Tesseract was available, but it did not find usable text."
+            )
+
+        raise ExtractionError(
+            "No extractable text was found. The PDF may be blank or "
+            f"contain an unreadable scanned image.{hint}"
+        )
+>>>>>>> feature/screen-map
     return page_count, blocks, pages

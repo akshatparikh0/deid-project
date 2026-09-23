@@ -40,8 +40,27 @@ def _word_boundary_pattern(value: str) -> re.Pattern[str]:
     return re.compile(rf"\b{re.escape(value)}\b")
 
 
+<<<<<<< HEAD
 def verify_redacted_pdf(pdf_bytes, entities, ai_detectors, min_confidence=0.85):
     """Returns a list of finding dicts; empty means verification passed."""
+=======
+def verify_redacted_pdf(pdf_bytes, entities, ai_detectors, min_confidence=0.85, force_ocr=False):
+    """Returns a list of finding dicts; empty means verification passed.
+
+    force_ocr should be set whenever the *original* document needed OCR:
+    finalize.py's redaction annotations paint over the source PDF's own
+    page content, but for a scanned page that content is one big image —
+    the box only blanks pixels within its own rectangle, so a value with no
+    box (never detected in the first place) leaves the original scan
+    pixels fully intact underneath, unredacted. The redacted PDF also now
+    carries a run of inserted "[TOKEN]" text from every entity that *was*
+    redacted, which on a heavily-redacted page is often enough native text
+    on its own to clear extract_blocks' word-count threshold and skip OCR —
+    silently blinding this exact check to a still-fully-visible scanned
+    value at the moment it matters most. Forcing OCR here removes that
+    blind spot: the underlying image gets re-read regardless of how much
+    native token text now sits on top of it."""
+>>>>>>> feature/screen-map
     kept_categories = {e.category for e in entities if e.mode == "keep"}
     surrogate_texts = {
         e.surrogate_value.strip().casefold()
@@ -54,7 +73,11 @@ def verify_redacted_pdf(pdf_bytes, entities, ai_detectors, min_confidence=0.85):
         if e.mode != "keep" and e.value.strip()
     }
 
+<<<<<<< HEAD
     _, blocks, _ = extract_blocks(io.BytesIO(pdf_bytes))
+=======
+    _, blocks, _ = extract_blocks(io.BytesIO(pdf_bytes), force_ocr=force_ocr)
+>>>>>>> feature/screen-map
 
     findings = []
     for block in blocks:

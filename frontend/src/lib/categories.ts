@@ -1,4 +1,4 @@
-import type { Category } from '../api/types';
+import type { Category } from '@/api/types';
 
 export interface CategoryMeta {
   category: Category;
