@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from django.test import SimpleTestCase
 
-from documents.extraction import ExtractionError, extract_blocks
+from pipeline.extraction import ExtractionError, extract_blocks
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 
@@ -146,7 +146,7 @@ class SparseNativeTextTriggersOcrTests(SimpleTestCase):
     without the tesseract binary."""
 
     def test_sparse_pages_fall_back_to_ocr_when_it_finds_more(self):
-        with patch("documents.extraction._ocr_words", return_value=_fake_words(200)):
+        with patch("pipeline.extraction._ocr_words", return_value=_fake_words(200)):
             _, blocks, _ = extract_blocks(_fixture("redacted_consult_note.pdf"))
         sources_by_page = {}
         for b in blocks:
@@ -158,6 +158,6 @@ class SparseNativeTextTriggersOcrTests(SimpleTestCase):
         self.assertFalse(any(b["type"] == "table_row" for b in blocks))
 
     def test_sparse_native_text_kept_when_ocr_unavailable(self):
-        with patch("documents.extraction._ocr_words", return_value=[]):
+        with patch("pipeline.extraction._ocr_words", return_value=[]):
             _, blocks, _ = extract_blocks(_fixture("redacted_consult_note.pdf"))
         self.assertTrue(all(b["source"] == "text" for b in blocks))

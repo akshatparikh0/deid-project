@@ -15,7 +15,7 @@ from rest_framework.test import APIClient
 
 from documents.models import AuditRecord, Folder, Job
 
-FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
+FIXTURES = os.path.join(os.path.dirname(__file__), "..", "..", "pipeline", "tests", "fixtures")
 
 
 def _upload_file(name):

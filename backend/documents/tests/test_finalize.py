@@ -18,7 +18,7 @@ from rest_framework.test import APIClient
 from documents.ingest import run_ingestion
 from documents.models import AuditRecord, ExportArtifact, ImmutableRecordError, Job
 
-FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
+FIXTURES = os.path.join(os.path.dirname(__file__), "..", "..", "pipeline", "tests", "fixtures")
 
 
 def _fixture(name):

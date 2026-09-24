@@ -8,7 +8,7 @@ the real rendered page image), one Page row per page image, and seed one
 CategoryRule per canonical Safe Harbor category.
 
 Runs as a Celery task (see tasks.py), advancing job.status through the
-parse/detect/transform/finalize stages (categories.STAGE_ORDER) and recording
+parse/detect/transform/finalize stages (choices.STAGE_ORDER) and recording
 each one's start/finish on a JobStage row so the Status page can poll live
 per-stage progress and timing for many jobs at once.
 """
@@ -19,13 +19,15 @@ from django.core.files.base import ContentFile
 from django.db import transaction
 from django.utils import timezone
 
-from .ai_detection import DetectorConfigError, build_detectors
-from .categories import CATEGORY_META, CATEGORY_ORDER, STAGE_ORDER
-from .detection import detect_spans, merge_spans
-from .extraction import ExtractionError, extract_blocks
+from pipeline.ai_detection import DetectorConfigError, build_detectors
+from pipeline.categories import CATEGORY_META, CATEGORY_ORDER
+from pipeline.detection import detect_spans, merge_spans
+from pipeline.extraction import ExtractionError, extract_blocks
+from pipeline.surrogates import make_surrogate
+from pipeline.validation import ValidationError, validate_pdf
+
+from .choices import STAGE_ORDER
 from .models import CategoryRule, DocumentBlock, Entity, JobStage, Page
-from .surrogates import make_surrogate
-from .validation import ValidationError, validate_pdf
 
 logger = logging.getLogger(__name__)
 

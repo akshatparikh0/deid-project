@@ -1,6 +1,6 @@
 from django.test import SimpleTestCase
 
-from documents.detection import detect_spans
+from pipeline.detection import detect_spans
 
 
 def _categories(text, column_header=None):

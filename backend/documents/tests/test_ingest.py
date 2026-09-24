@@ -8,7 +8,7 @@ from django.test import TestCase
 from documents.ingest import run_ingestion
 from documents.models import Job
 
-FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
+FIXTURES = os.path.join(os.path.dirname(__file__), "..", "..", "pipeline", "tests", "fixtures")
 
 
 def _fixture(name):

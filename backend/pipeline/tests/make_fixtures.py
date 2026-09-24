@@ -4,7 +4,7 @@ detection/extraction/ingest tests. Not a test itself (doesn't match
 Django's `test*.py` discovery) — run manually to regenerate the fixture PDFs
 if the fixture content below changes:
 
-    python manage.py shell -c "from documents.tests.make_fixtures import build_all; build_all()"
+    python manage.py shell -c "from pipeline.tests.make_fixtures import build_all; build_all()"
 
 Produces:
 - fixtures/consult_note.pdf        — real text layer (tests table-aware

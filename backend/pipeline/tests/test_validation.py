@@ -5,7 +5,7 @@ import io
 import pymupdf
 from django.test import SimpleTestCase
 
-from documents.validation import ValidationError, validate_pdf
+from pipeline.validation import ValidationError, validate_pdf
 
 
 def _pdf_bytes(text="Synthetic medical record"):

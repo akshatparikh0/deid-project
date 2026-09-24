@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .categories import MODE_CHOICES
+from pipeline.categories import MODE_CHOICES
 from .models import CategoryRule, Entity, Folder, FolderCategoryRule, Job, JobStage, UploadBatch
 
 

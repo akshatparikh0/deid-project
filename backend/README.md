@@ -40,12 +40,17 @@ AI detector, storage, and broker setting.
 
 ## Architecture
 
-The entire pipeline lives in the `documents` Django app — one place to read
-it end to end, one `detection.py`, one `extraction.py`, no second copy of
-either under a different package. (An earlier iteration split this across a
-standalone `redaction_pipeline` package and this app; it's been folded in.)
+The pipeline (detection, extraction, validation, redaction, verification —
+code with no Django models and no database dependency) lives in its own
+`pipeline` package, separate from `documents`, the Django app that persists
+results and exposes the API. One `detection.py`, one `extraction.py`, no
+second copy of either under a different package name. (An earlier iteration
+split this across a standalone `redaction_pipeline` package and `documents`;
+that was folded into `documents` and has since been split back out into
+`pipeline`, this time with `documents` depending on `pipeline` — never the
+reverse — rather than the two duplicating each other.)
 
-- **`documents/detection.py`** — the base PHI detector. It's regex +
+- **`pipeline/detection.py`** — the base PHI detector. It's regex +
   keyword-context based, not a trained NER model, so the project has zero
   *required* heavyweight ML dependencies. It handles the highest-precision
   identifiers well (SSNs, dates, emails, phone/fax, IPs, URLs, labelled
@@ -55,18 +60,18 @@ standalone `redaction_pipeline` package and this app; it's been folded in.)
   `physician_name` / `guarantor_name` / other `person_name`, by nearby cue
   words), facilities, employers, biometrics, photos and the open-ended
   "other" class — the full taxonomy is `categories.py`'s `CATEGORY_ORDER`,
-  shared with the project configuration schema.
+  shared with the project configuration schema, and it now lives in `pipeline/categories.py`.
   Overlapping matches are resolved by confidence first (not span length), so
   a short high-confidence match is never silently dropped in favor of a
   longer, vaguer one. When a piece of text is a table cell, its column
   header can be passed in to catch bare identifying values that have no
   inline label (see `extraction.py`'s table handling).
-- **`documents/ai_detection.py`** — optional Azure AI Language and Claude
+- **`pipeline/ai_detection.py`** — optional Azure AI Language and Claude
   detectors (FR-61), off by default (`REDACTION_ENABLE_AZURE_LANGUAGE` /
   `REDACTION_ENABLE_AI`). Each returns spans in the exact shape
   `detect_spans()` does; `detection.merge_spans()` resolves overlaps across
   every enabled engine together with the same confidence-first rule.
-- **`documents/extraction.py`** — turns a PDF into paragraph-ish text blocks
+- **`pipeline/extraction.py`** — turns a PDF into paragraph-ish text blocks
   and table-row blocks via `pdfplumber`, using blank-line/heading heuristics
   since paragraph structure isn't reliably encoded in arbitrary PDFs. Tables
   are extracted row-by-row (via `page.find_tables()`) rather than folded
@@ -87,15 +92,15 @@ standalone `redaction_pipeline` package and this app; it's been folded in.)
   `Job.confidence_threshold`; below that it defaults to `"keep"` so a
   low-confidence guess never changes the document without a reviewer's
   confirmation (FR-21/AC-13).
-- **`documents/surrogates.py`** — deterministic fake-value generation for
+- **`pipeline/surrogates.py`** — deterministic fake-value generation for
   "pseudonymize" mode (same input always maps to the same surrogate; no
   external `Faker` dependency).
-- **`documents/finalize.py`** — reviewer-approved finalization (FR-76 –
+- **`pipeline/finalize.py`** — reviewer-approved finalization (FR-76 –
   FR-83). Once a job is completed, this true-redacts the *original* PDF's
   content stream via PyMuPDF (`build_redacted_pdf`) — the text is removed,
   not painted over (FR-80) — rather than rebuilding the document. This is
   what `documents/complete.py` calls before the source file is purged.
-- **`documents/verify.py`** — second-pass verification (FR-81, AC-25):
+- **`pipeline/verify.py`** — second-pass verification (FR-81, AC-25):
   re-runs detection on the finalized PDF and reports anything that should
   have been removed but is still readable. `documents/complete.py`
   orchestrates finalize → verify → write the permanent audit trail

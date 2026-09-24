@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 from django.test import SimpleTestCase
 
-from documents.ai_detection import (
+from pipeline.ai_detection import (
     AzureLanguageDetector,
     ClaudeDetector,
     DetectorConfigError,

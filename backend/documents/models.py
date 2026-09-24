@@ -3,13 +3,13 @@ import hashlib
 from django.db import models
 from django.utils import timezone
 
-from .categories import (
+from pipeline.categories import CATEGORY_META, MODE_CHOICES
+
+from .choices import (
     BLOCK_SOURCE_CHOICES,
     BLOCK_TYPE_CHOICES,
     CATEGORY_CHOICES,
-    CATEGORY_META,
     JOB_STATUS_CHOICES,
-    MODE_CHOICES,
     STAGE_CHOICES,
     STAGE_STATUS_CHOICES,
 )

@@ -4,7 +4,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .categories import CATEGORY_META, CATEGORY_ORDER
+from pipeline.categories import CATEGORY_META, CATEGORY_ORDER
 from .complete import VerificationError, complete_job
 from .export import build_export, content_type_for
 from .models import CategoryRule, Entity, ExportArtifact, Folder, FolderCategoryRule, Job, Page, UploadBatch

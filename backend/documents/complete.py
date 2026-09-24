@@ -15,12 +15,13 @@ from django.conf import settings
 from django.core.files.base import ContentFile
 from django.db import transaction
 
-from .ai_detection import build_detectors
+from pipeline.ai_detection import build_detectors
+from pipeline.finalize import build_redacted_pdf
+from pipeline.policy import load_policy
+from pipeline.verify import VerificationError, verify_redacted_pdf
+
 from .audit import write_audit_records
-from .finalize import build_redacted_pdf
 from .models import ExportArtifact
-from .policy import load_policy
-from .verify import VerificationError, verify_redacted_pdf
 
 logger = logging.getLogger(__name__)
 

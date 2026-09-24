@@ -13,7 +13,7 @@ from celery import shared_task
 from django.db import close_old_connections
 from django.utils import timezone
 
-from .categories import STAGE_ORDER
+from .choices import STAGE_ORDER
 from .ingest import run_ingestion
 from .models import Job, JobStage
 
