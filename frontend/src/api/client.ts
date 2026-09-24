@@ -283,8 +283,8 @@ export function applyRules(jobId: number): Promise<ApplyRulesResponse> {
 
 // ---- Lifecycle ----
 
-export function completeJob(jobId: number, force?: boolean): Promise<JobResponse> {
-  return request<JobResponse>(`/jobs/${jobId}/complete/`, json({ force: !!force }));
+export function completeJob(jobId: number): Promise<JobResponse> {
+  return request<JobResponse>(`/jobs/${jobId}/complete/`, json({}));
 }
 
 export function reopenJob(jobId: number): Promise<JobResponse> {

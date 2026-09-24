@@ -13,6 +13,7 @@ each one's start/finish on a JobStage row so the Status page can poll live
 per-stage progress and timing for many jobs at once.
 """
 import logging
+import re
 
 from django.conf import settings
 from django.core.files.base import ContentFile
@@ -153,6 +154,72 @@ def _spans_for_block(raw, ai_detectors):
     return spans_with_boxes
 
 
+# Categories only ever matched via a context cue sitting right next to the
+# value (e.g. "Unit: Medical ICU", "Patient: John Doe") rather than a
+# self-contained shape (an SSN's digit pattern, a facility's own "...
+# Hospital"/"... Medical Center" suffix) — the same exact value mentioned
+# again elsewhere, with no cue nearby, would otherwise never become an
+# entity at all and would still be fully readable in the finalized
+# document.
+_PROPAGATE_CATEGORIES = {
+    "person_name", "physician_name", "patient_name", "guarantor_name", "employer", "facility_name",
+}
+
+
+def _propagate_literal_matches(detected):
+    """Once a value has been confirmed as PHI anywhere in the document
+    (found by `_spans_for_block` above, in one of `_PROPAGATE_CATEGORIES`),
+    add a new span+box for every other case-sensitive, whole-word
+    occurrence of that exact string across every block's free-running text,
+    at the same confidence and category, so a reviewer sees — and finalize.py
+    redacts — every mention of it, not just the one a context cue happened
+    to sit next to. A cell's own column header already acts as its context
+    cue — a table_row block's cells are in fact where a fair number of
+    these context matches come from (e.g. a "Unit" column reading "Medical
+    ICU") — so cell blocks still count as a *source* of a confirmed value;
+    they're just never searched as a *target*, since the free-running
+    prose text this gap actually affects lives in ordinary line/paragraph
+    blocks, not table cells."""
+    known = {}
+    for raw, spans_with_boxes in detected:
+        for span, _boxes in spans_with_boxes:
+            if span["category"] not in _PROPAGATE_CATEGORIES:
+                continue
+            value = raw["text"][span["start"]:span["end"]].strip()
+            if len(value) < 3:
+                continue
+            key = (span["category"], value)
+            if key not in known or span["confidence"] > known[key]:
+                known[key] = span["confidence"]
+
+    if not known:
+        return
+
+    patterns = {key: re.compile(rf"\b{re.escape(key[1])}\b") for key in known}
+
+    for raw, spans_with_boxes in detected:
+        if raw.get("cells"):
+            continue
+        words = raw.get("words", [])
+        if not words:
+            continue
+        text = raw["text"]
+        covered = [(s["start"], s["end"]) for s, _ in spans_with_boxes]
+        for (category, value), confidence in known.items():
+            for m in patterns[(category, value)].finditer(text):
+                start, end = m.span()
+                if any(start < c_end and end > c_start for c_start, c_end in covered):
+                    continue
+                boxes = _line_group_boxes(words, start, end)
+                if not boxes:
+                    continue
+                spans_with_boxes.append((
+                    {"start": start, "end": end, "category": category, "confidence": confidence, "detector": "propagated"},
+                    boxes,
+                ))
+                covered.append((start, end))
+
+
 def run_ingestion(job, file_obj):
     """Populate `job` (already saved, status='scanning') from `file_obj`,
     advancing it through parse -> detect -> transform -> finalize. On
@@ -195,6 +262,7 @@ def run_ingestion(job, file_obj):
         # is persisted until 'finalize' so a mid-stage failure leaves no
         # partial rows behind.
         detected = [(raw, _spans_for_block(raw, ai_detectors)) for raw in raw_blocks]
+        _propagate_literal_matches(detected)
     except Exception:
         logger.exception("Unexpected error detecting PHI for job %s", job.id)
         message = "An unexpected error occurred while detecting identifiers."

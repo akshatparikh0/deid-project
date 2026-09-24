@@ -25,7 +25,7 @@ from .detection import _person_category
 # Detected text that's an exact match for one of our own masking
 # placeholders (e.g. an AI detector re-"finding" a literal "[PATIENT_NAME]"
 # token left over from a prior pass) must never be treated as a fresh
-# finding — see verify.py, which reuses this set for the same reason.
+# finding.
 PLACEHOLDER_TOKENS = {meta["token"].strip("[]") for meta in CATEGORY_META.values()}
 
 

@@ -16,7 +16,6 @@ import { ConfirmModal } from '@/components/ConfirmModal';
 import { PageHeader } from '@/components/Layout';
 import { StatusBadge } from '@/components/StatusBadge';
 import { EmptyState, ErrorBanner, LoadingState } from '@/components/States';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { paths } from '@/config/paths';
@@ -344,14 +343,6 @@ export function QueuePage() {
                         <>
                           {job.entity_count} across {job.class_count}{' '}
                           {job.class_count === 1 ? 'class' : 'classes'}
-                          {job.unresolved_count > 0 && (
-                            <Badge
-                              variant="outline"
-                              className="ml-1.5 border-transparent bg-status-warning-bg text-status-warning"
-                            >
-                              {job.unresolved_count} unresolved
-                            </Badge>
-                          )}
                         </>
                       )}
                     </TableCell>

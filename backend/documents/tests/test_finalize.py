@@ -2,9 +2,8 @@
 End-to-end regression coverage for reviewer-approved finalization: the full
 upload -> review -> complete flow through the actual API view, asserting
 that completion (a) truly redacts the original PDF's content stream (not
-just a rebuilt reportlab document), (b) fails closed and leaves the job
-recoverable when verification finds a survivor, and (c) writes a permanent,
-append-only audit trail.
+just a rebuilt reportlab document), and (b) writes a permanent, append-only
+audit trail.
 """
 import io
 import os
@@ -126,49 +125,34 @@ class SuccessfulFinalizationTests(JobCompletionTestCase):
         self.assertEqual(len(post_resp.data["rows"]), self.entity_count)
 
 
-class VerificationFailureTests(JobCompletionTestCase):
-    def test_a_span_that_cannot_be_redacted_fails_the_job_closed(self):
-        job = self._ingest("consult_note.pdf")
-        job.entities.update(mode="mask")
-        # Sabotage one entity's boxes so finalize.py has nothing to draw a
-        # redaction rectangle over — its original text necessarily survives
-        # in the finalized PDF, which verification must catch.
-        victim = job.entities.filter(category="patient_name").first()
-        self.assertIsNotNone(victim)
-        victim.boxes = []
-        victim.save(update_fields=["boxes"])
+class CompletionFailureHandlingTests(JobCompletionTestCase):
+    def setUp(self):
+        super().setUp()
+        self.job = self._ingest("consult_note.pdf")
+        self.job.entities.update(mode="mask")
 
-        resp = self.client.post(f"/api/jobs/{job.id}/complete/", {}, format="json")
-        self.assertEqual(resp.status_code, 422, resp.data)
-        self.assertIn("Verification failed", resp.data["detail"])
+    def test_completing_an_already_complete_job_is_a_no_op(self):
+        first = self.client.post(f"/api/jobs/{self.job.id}/complete/", {}, format="json")
+        self.assertEqual(first.status_code, 200, first.data)
 
-        job.refresh_from_db()
-        self.assertEqual(job.status, "failed")
-        self.assertIn("Verification failed", job.error_message)
-        # Nothing destructive happened: the source file is intact and no
-        # (necessarily-unverified) audit trail was written.
-        self.assertTrue(job.file)
-        self.assertEqual(job.audit_records.count(), 0)
-        self.assertFalse(ExportArtifact.objects.filter(job=job, format="pdf").exists())
+        # A repeat "Mark complete" (a double click, a retried request) must
+        # not try to re-finalize a job whose source file is already
+        # purged — that used to crash uncaught and leave the job stuck on
+        # "finalizing" with whatever error_message it last had.
+        second = self.client.post(f"/api/jobs/{self.job.id}/complete/", {}, format="json")
+        self.assertEqual(second.status_code, 200, second.data)
+        self.assertEqual(second.data["job"]["status"], "complete")
 
-    def test_failed_job_can_be_reopened_and_recompleted(self):
-        job = self._ingest("consult_note.pdf")
-        job.entities.update(mode="mask")
-        victim = job.entities.filter(category="patient_name").first()
-        victim.boxes = []
-        victim.save(update_fields=["boxes"])
-        self.client.post(f"/api/jobs/{job.id}/complete/", {}, format="json")
+    def test_a_completion_failure_reverts_to_failed_instead_of_sticking_on_finalizing(self):
+        # Simulate the source file having gone missing out from under a job
+        # that's mid-review (storage cleanup, a bad migration, anything) —
+        # whatever the cause, complete_job() must not be allowed to leave
+        # the job stuck on "finalizing" after an unhandled crash.
+        self.job.file.delete(save=True)
 
-        # A reviewer fixes the problem the only way the API exposes:
-        # setting that entity to "keep" so it's no longer a redaction
-        # target (in practice they'd re-run detection; this isolates the
-        # reopen -> recomplete path without needing a second fixture).
-        self.client.post(f"/api/jobs/{job.id}/reopen/", {}, format="json")
-        job.refresh_from_db()
-        self.assertEqual(job.status, "in_review")
-        job.entities.filter(pk=victim.pk).update(mode="keep")
+        resp = self.client.post(f"/api/jobs/{self.job.id}/complete/", {}, format="json")
+        self.assertEqual(resp.status_code, 500, resp.data)
 
-        resp = self.client.post(f"/api/jobs/{job.id}/complete/", {"force": True}, format="json")
-        self.assertEqual(resp.status_code, 200, resp.data)
-        job.refresh_from_db()
-        self.assertEqual(job.status, "complete")
+        self.job.refresh_from_db()
+        self.assertEqual(self.job.status, "failed")
+        self.assertTrue(self.job.error_message)

@@ -1,7 +1,6 @@
 import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { TriangleAlert } from 'lucide-react';
 import {
   ApiError,
   bulkUpdateEntities,
@@ -18,7 +17,6 @@ import { ErrorBanner, LoadingState } from '@/components/States';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { paths } from '@/config/paths';
-import { cn } from '@/lib/utils';
 import { getDisplayThreshold } from '@/lib/threshold';
 import { showToast } from '@/lib/toast';
 import { setActiveJob } from '@/stores/activeJob';
@@ -52,7 +50,6 @@ export function ReviewPage() {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
-  const [confirmingComplete, setConfirmingComplete] = useState<number | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [paneView, setPaneView] = useState<PaneView>('both');
   const [inspectorOpen, setInspectorOpen] = useState(true);
@@ -91,7 +88,6 @@ export function ReviewPage() {
     return map;
   }, [entities]);
 
-  const unresolvedCount = useMemo(() => entities.filter((e) => e.mode === 'keep').length, [entities]);
   const dimThreshold = job ? getDisplayThreshold(jobId, job.confidence_threshold) : undefined;
 
   async function handleModeChange(entity: Entity, mode: Mode) {
@@ -125,23 +121,17 @@ export function ReviewPage() {
     }
   }
 
-  async function handleComplete(force?: boolean) {
+  async function handleComplete() {
     if (!job) return;
     setActionError(null);
     setLifecycleBusy(true);
     try {
-      const { job: updated } = await completeJob(jobId, force);
+      const { job: updated } = await completeJob(jobId);
       setJob(updated);
       setActiveJob(updated);
-      setConfirmingComplete(null);
       showToast(`${updated.code} marked complete. Finalized, verified, and the source document has been purged.`);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        const count = (err.body?.unresolved_count as number | undefined) ?? unresolvedCount;
-        setConfirmingComplete(count);
-      } else {
-        setActionError(err instanceof ApiError ? err.detail : 'Failed to mark the job complete.');
-      }
+      setActionError(err instanceof ApiError ? err.detail : 'Failed to mark the job complete.');
     } finally {
       setLifecycleBusy(false);
     }
@@ -167,8 +157,6 @@ export function ReviewPage() {
   if (!job || !doc) return null;
 
   const isComplete = job.status === 'complete';
-  const resolvedCount = entities.length - unresolvedCount;
-  const progressPct = entities.length === 0 ? 0 : Math.round((resolvedCount / entities.length) * 100);
   const showOriginal = paneView !== 'deidentified';
   const showDeid = paneView !== 'original';
   const gridTemplateColumns = [
@@ -190,24 +178,6 @@ export function ReviewPage() {
             {job.code} · {job.pages} page{job.pages === 1 ? '' : 's'} ·{' '}
             <Link to={paths.jobRules.getHref(jobId)}>Rules</Link> ·{' '}
             <Link to={paths.jobAudit.getHref(jobId)}>Audit trail</Link>
-          </div>
-        </div>
-
-        <div className="ml-2 flex flex-col gap-1.25">
-          <div className="text-muted-foreground text-[11px] tracking-[0.05em] uppercase">Resolved</div>
-          <div className="flex items-center gap-2.25">
-            <div className="bg-muted h-1.25 w-37.5 overflow-hidden rounded-full">
-              <div
-                className={cn(
-                  'h-full rounded-full transition-[width] duration-200',
-                  unresolvedCount > 0 ? 'bg-status-warning' : 'bg-status-success',
-                )}
-                style={{ width: `${progressPct}%` }}
-              />
-            </div>
-            <span className="font-mono text-xs">
-              {resolvedCount} / {entities.length}
-            </span>
           </div>
         </div>
 
@@ -239,12 +209,7 @@ export function ReviewPage() {
               </Button>
             </div>
           ) : (
-            <Button
-              size="sm"
-              disabled={lifecycleBusy}
-              title={unresolvedCount > 0 ? `${unresolvedCount} entities still need a decision` : undefined}
-              onClick={() => handleComplete(false)}
-            >
+            <Button size="sm" disabled={lifecycleBusy} onClick={() => handleComplete()}>
               Mark complete
             </Button>
           )}
@@ -272,22 +237,6 @@ export function ReviewPage() {
       </div>
 
       {actionError && <ErrorBanner message={actionError} />}
-
-      {confirmingComplete !== null && (
-        <div className="bg-status-danger-bg text-destructive border-destructive/20 mb-4.5 flex items-center gap-2.5 rounded-md border px-3.5 py-3 text-[13px]">
-          <TriangleAlert className="size-4 shrink-0" aria-hidden="true" />
-          <div className="flex-1">
-            {confirmingComplete} entit{confirmingComplete === 1 ? 'y is' : 'ies are'} still kept
-            as-is. Complete anyway?
-          </div>
-          <Button variant="outline" size="sm" onClick={() => setConfirmingComplete(null)}>
-            Cancel
-          </Button>
-          <Button variant="destructive" size="sm" onClick={() => handleComplete(true)}>
-            Complete anyway
-          </Button>
-        </div>
-      )}
 
       <div
         className="grid min-h-0 flex-1 grid-cols-[var(--review-grid-cols)] gap-4 max-lg:h-auto max-lg:grid-cols-1"

@@ -134,6 +134,7 @@ export function EntityInspector({
                     type="button"
                     variant={active ? 'default' : 'outline'}
                     size="sm"
+                    className="h-auto min-h-8 min-w-0 px-1.5 py-1 text-center text-[12px] leading-tight whitespace-normal wrap-anywhere"
                     disabled={readOnly || busyId === selected.id}
                     title={readOnly ? 'Reopen this document to change entities.' : MODE_NOTES[mode]}
                     onClick={() => onModeChange(selected, mode)}

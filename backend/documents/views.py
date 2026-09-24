@@ -1,3 +1,5 @@
+import logging
+
 from django.db.models import Count
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
@@ -5,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from pipeline.categories import CATEGORY_META, CATEGORY_ORDER
-from .complete import VerificationError, complete_job
+from .complete import complete_job
 from .export import build_export, content_type_for
 from .models import CategoryRule, Entity, ExportArtifact, Folder, FolderCategoryRule, Job, Page, UploadBatch
 from .payload import build_document_payload
@@ -14,7 +16,6 @@ from .serializers import (
     BulkModeUpdateSerializer,
     CategoryRulePatchSerializer,
     CategoryRuleSerializer,
-    CompleteJobSerializer,
     EntityModeUpdateSerializer,
     EntitySerializer,
     ExportRequestSerializer,
@@ -29,6 +30,8 @@ from .serializers import (
     UploadSerializer,
 )
 from .tasks import ingest_job, seed_stages
+
+logger = logging.getLogger(__name__)
 
 
 def _job_or_404(job_id):
@@ -290,12 +293,9 @@ class JobDetailView(APIView):
 class JobDocumentView(APIView):
     def get(self, request, job_id):
         job = _job_or_404(job_id)
-        # "failed" covers two different things: ingestion never produced a
-        # document at all (nothing to show), or completion's verification
-        # step rejected an otherwise-fully-reviewed document (blocks and
-        # entities exist, and the reviewer needs to see them to fix
-        # whatever survived) — checking for blocks distinguishes the two
-        # instead of blocking every "failed" job equally.
+        # A "failed" job from ingestion never produced a document at all
+        # (nothing to show) — checking for blocks distinguishes that from
+        # any other "failed" job that does have a reviewable document.
         if not job.blocks.exists():
             return Response({"detail": "This job failed to scan and has no document to review."}, status=409)
         return Response(build_document_payload(job))
@@ -390,33 +390,34 @@ class JobRulesApplyView(APIView):
 class JobCompleteView(APIView):
     def post(self, request, job_id):
         job = _job_or_404(job_id)
-        serializer = CompleteJobSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
 
-        unresolved = job.entities.filter(mode="keep").count()
-        if unresolved and not serializer.validated_data["force"]:
-            return Response(
-                {"detail": f"{unresolved} identifier(s) are still set to Keep.", "unresolved_count": unresolved},
-                status=409,
-            )
+        if job.status == "complete":
+            # Already finalized (and its source file already purged) —
+            # re-running complete_job() against a job in this state would
+            # crash trying to re-open a file that's no longer there. A
+            # repeat "Mark complete" click/request is a no-op, not an error.
+            return Response({"job": JobSerializer(job).data})
 
         job.status = "finalizing"
         job.save(update_fields=["status"])
 
         try:
             complete_job(job)
-        except VerificationError as exc:
-            # The source file and every DB row up to this point are
-            # untouched — the job goes to "failed" rather than "complete"
-            # so a partially- or unverifiably-redacted document is never
-            # delivered (FR-81, AC-25).
+        except Exception as exc:
+            # Whatever went wrong (a missing/corrupt source file, a
+            # malformed PDF PyMuPDF can't finalize, anything unexpected),
+            # the job must land somewhere recoverable rather than stay
+            # stuck on "finalizing" forever with a stale error_message —
+            # a job only ever reads as done once it actually is.
+            logger.exception("Job %s failed to complete", job.code)
             job.status = "failed"
-            job.error_message = str(exc)
+            job.error_message = str(exc) or "An unexpected error occurred while completing this job."
             job.save(update_fields=["status", "error_message"])
-            return Response({"detail": str(exc), "job": JobSerializer(job).data}, status=422)
+            return Response({"detail": job.error_message, "job": JobSerializer(job).data}, status=500)
 
         job.status = "complete"
-        job.save(update_fields=["status"])
+        job.error_message = None
+        job.save(update_fields=["status", "error_message"])
         job.purge_source_file()
         return Response({"job": JobSerializer(job).data})
 
@@ -473,10 +474,9 @@ class JobExportView(APIView):
             # complete_job() (see complete.py) already wrote the true
             # PyMuPDF-redacted "pdf" artifact at finalization — regenerating
             # it here via the reportlab reconstruction would silently
-            # replace a verified, byte-faithful result with a lower-fidelity
-            # one, and the source file it would need is purged by then
-            # anyway. Only build it on demand for a job that hasn't been
-            # finalized yet.
+            # replace a byte-faithful result with a lower-fidelity one, and
+            # the source file it would need is purged by then anyway. Only
+            # build it on demand for a job that hasn't been finalized yet.
             if fmt == "pdf" and job.status == "complete":
                 artifact = ExportArtifact.objects.get(job=job, format="pdf")
             else:

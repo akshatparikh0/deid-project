@@ -109,5 +109,5 @@ export const MODE_NOTES: Record<import('../api/types').Mode, string> = {
   mask: 'The value is replaced by a placeholder token. Document structure and readability are preserved.',
   pseudo:
     'A consistent surrogate replaces the value everywhere it appears in this document. The mapping is retained so the set can be re-identified under a separate authorization.',
-  keep: 'Value is released as-is. Requires a documented justification; the document no longer meets Safe Harbor.',
+  keep: 'Value is released as-is. The document no longer meets Safe Harbor.',
 };

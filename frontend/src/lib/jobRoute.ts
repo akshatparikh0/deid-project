@@ -4,14 +4,11 @@ import { paths } from '@/config/paths';
 /** Where clicking into a job should land, based on how far it's progressed.
  * `batchId` is the job's UploadBatch id (Job.batch) — while a job is still
  * processing, or if it failed, that's its batch's Status page.
- * For a job with no batch (batchId == null), 'failed' covers two different
- * things: ingestion never produced a document at all (nothing to show —
- * entityCount 0), or a completion-time verification failure, where the
- * document and every entity are still there and the reviewer needs to get
- * back in to fix whatever survived (see documents/views.py's
- * JobDocumentView, which allows exactly this case) — `entityCount`
- * distinguishes the two instead of treating every non-batch failure as a
- * dead end. */
+ * For a job with no batch (batchId == null), a 'failed' job with no
+ * entities means ingestion never produced a document at all (nothing to
+ * show); `entityCount` distinguishes that dead end from a 'failed' job
+ * that does have a reviewable document (see documents/views.py's
+ * JobDocumentView, which allows exactly this case). */
 export function routeForJobStatus(
   id: number,
   status: JobStatus,

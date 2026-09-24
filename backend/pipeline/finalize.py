@@ -129,7 +129,17 @@ def build_redacted_pdf(source_bytes: bytes, entities, page_rotations: dict[int, 
                 fill = (0, 0, 0) if is_redact else (1, 1, 1)
                 text_color = (1, 1, 1) if is_redact else (0, 0, 0)
                 for index, box in enumerate(entity.boxes):
-                    draw_text = replacement if index == 0 else None
+                    # A leading space keeps the inserted token from visually
+                    # (and, worse, textually, when the PDF is re-extracted
+                    # for export/audit) gluing onto whatever original word
+                    # sits immediately before the box: _BOX_PADDING_X shifts
+                    # the box's own left edge left by enough to consume a
+                    # single-space gap entirely (e.g. "DOB 05/21/1956" ->
+                    # box starts right where "05" did, padding eats the
+                    # space before it), so without this the replacement
+                    # token would otherwise start flush against the
+                    # preceding word.
+                    draw_text = f" {replacement}" if index == 0 and replacement else None
                     box = _padded_box(box)
                     if rotated:
                         quad = _rotated_box_quad(box, angle)

@@ -46,7 +46,6 @@ class FolderPatchSerializer(serializers.Serializer):
 class JobSerializer(serializers.ModelSerializer):
     code = serializers.ReadOnlyField()
     entity_count = serializers.SerializerMethodField()
-    unresolved_count = serializers.SerializerMethodField()
     class_count = serializers.SerializerMethodField()
     # Read-only FK id, not the batch object — lets a scanning/failed job in
     # QueuePage route to its batch's Status page (see lib/jobRoute.ts).
@@ -56,15 +55,12 @@ class JobSerializer(serializers.ModelSerializer):
         model = Job
         fields = [
             "id", "code", "filename", "uploaded_by", "department", "folder", "batch", "pages",
-            "status", "error_message", "entity_count", "unresolved_count",
+            "status", "error_message", "entity_count",
             "class_count", "confidence_threshold", "created_at", "updated_at",
         ]
 
     def get_entity_count(self, obj):
         return obj.entities.count()
-
-    def get_unresolved_count(self, obj):
-        return obj.entities.filter(mode="keep").count()
 
     def get_class_count(self, obj):
         return obj.entities.values("category").distinct().count()
@@ -136,10 +132,6 @@ class JobPatchSerializer(serializers.Serializer):
         if value.level != 1:
             raise serializers.ValidationError("Documents can only be placed in a patient folder.")
         return value
-
-
-class CompleteJobSerializer(serializers.Serializer):
-    force = serializers.BooleanField(required=False, default=False)
 
 
 class ExportRequestSerializer(serializers.Serializer):

@@ -37,8 +37,8 @@ export type Mode = 'redact' | 'mask' | 'pseudo' | 'keep';
 // "queued": uploaded, waiting for a worker to pick it up (async processing
 // — see the backend's Celery integration; with no broker configured this
 // state is typically instantaneous). "finalizing": completion requested,
-// running true-PDF-redaction + second-pass verification — also normally
-// instantaneous, but a real state a client can poll/show a spinner for.
+// running true-PDF-redaction — also normally instantaneous, but a real
+// state a client can poll/show a spinner for.
 export type JobStatus = 'queued' | 'scanning' | 'in_review' | 'finalizing' | 'complete' | 'failed';
 
 export type StageName = 'ingest' | 'parse' | 'detect' | 'transform' | 'finalize';
@@ -77,7 +77,6 @@ export interface Job {
   status: JobStatus;
   error_message: string | null;
   entity_count: number;
-  unresolved_count: number; // entities currently mode === 'keep'
   class_count: number; // distinct categories detected
   confidence_threshold: number; // 0..1
   created_at: string; // ISO datetime
