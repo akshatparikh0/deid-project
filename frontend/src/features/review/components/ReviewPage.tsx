@@ -133,8 +133,16 @@ export function ReviewPage() {
     setLifecycleBusy(true);
     try {
       const { job: updated } = await completeJob(jobId);
+      // Completion replaces the page-preview images with fresh renders of
+      // the finalized (redacted) PDF (see documents/complete.py) — refetch
+      // the document payload so the Output pane picks up the new images
+      // instead of continuing to show whatever it already had in memory
+      // from before completion.
+      const docRes = await getDocument(jobId);
       setJob(updated);
       setActiveJob(updated);
+      setDoc(docRes);
+      setEntities(docRes.entities);
       showToast(`${updated.code} marked complete. Finalized, and the source document has been purged.`);
     } catch (err) {
       setActionError(err instanceof ApiError ? err.detail : 'Failed to mark the job complete.');

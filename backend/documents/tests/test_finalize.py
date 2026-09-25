@@ -81,6 +81,14 @@ class SuccessfulFinalizationTests(JobCompletionTestCase):
         before = list(self.job.page_images.values_list("id", flat=True))
         self.assertTrue(before)
 
+        # The /document/ payload's image_url must change too, not just the
+        # underlying row — the URL is otherwise identical before and after
+        # (addressed by page number, not by file), so a client that already
+        # fetched it once would never know to refetch and would just keep
+        # showing the pre-completion image.
+        pre_doc = self.client.get(f"/api/jobs/{self.job.id}/document/")
+        pre_url = pre_doc.data["pages"][0]["image_url"]
+
         resp = self.client.post(f"/api/jobs/{self.job.id}/complete/", {}, format="json")
         self.assertEqual(resp.status_code, 200, resp.data)
 
@@ -88,6 +96,10 @@ class SuccessfulFinalizationTests(JobCompletionTestCase):
         self.assertTrue(after)
         # New rows, not the same (never-purged) originals.
         self.assertEqual(set(before) & set(after), set())
+
+        post_doc = self.client.get(f"/api/jobs/{self.job.id}/document/")
+        post_url = post_doc.data["pages"][0]["image_url"]
+        self.assertNotEqual(pre_url, post_url)
 
         # Just confirm it's a non-trivial PNG, not an empty/broken file.
         page = self.job.page_images.get(number=1)
