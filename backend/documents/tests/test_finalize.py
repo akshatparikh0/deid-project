@@ -156,3 +156,24 @@ class CompletionFailureHandlingTests(JobCompletionTestCase):
         self.job.refresh_from_db()
         self.assertEqual(self.job.status, "failed")
         self.assertTrue(self.job.error_message)
+
+    def test_reopening_a_complete_job_is_rejected_and_leaves_it_complete(self):
+        # The exact bug report this guards against: Mark complete -> Reopen
+        # -> Mark complete again used to crash on the second completion,
+        # because purge_source_file() (Job.purge_source_file) already
+        # deleted the source PDF the first time around — reopen must never
+        # let a truly-complete job get back into a state that can't
+        # actually be re-finalized.
+        complete_resp = self.client.post(f"/api/jobs/{self.job.id}/complete/", {}, format="json")
+        self.assertEqual(complete_resp.status_code, 200, complete_resp.data)
+
+        reopen_resp = self.client.post(f"/api/jobs/{self.job.id}/reopen/", {}, format="json")
+        self.assertEqual(reopen_resp.status_code, 409, reopen_resp.data)
+        self.assertIn("cannot be reopened", reopen_resp.data["detail"])
+
+        self.job.refresh_from_db()
+        self.assertEqual(self.job.status, "complete")
+
+        # A second "Mark complete" still just no-ops rather than crashing.
+        second_complete = self.client.post(f"/api/jobs/{self.job.id}/complete/", {}, format="json")
+        self.assertEqual(second_complete.status_code, 200, second_complete.data)

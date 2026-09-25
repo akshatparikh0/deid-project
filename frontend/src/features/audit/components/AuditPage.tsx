@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ApiError, exportJob, getAudit, getJob, reopenJob, resolveApiUrl } from '@/api/client';
+import { Link, useParams } from 'react-router-dom';
+import { ApiError, exportJob, getAudit, getJob, resolveApiUrl } from '@/api/client';
 import type { AuditRow, Job } from '@/api/types';
 import { CategoryBadge } from '@/components/CategoryBadge';
 import { PageHeader } from '@/components/Layout';
@@ -16,7 +16,6 @@ import { ModePill } from './ModePill';
 export function AuditPage() {
   const { id } = useParams<{ id: string }>();
   const jobId = Number(id);
-  const navigate = useNavigate();
 
   const [job, setJob] = useState<Job | null>(null);
   const [rows, setRows] = useState<AuditRow[] | null>(null);
@@ -24,8 +23,6 @@ export function AuditPage() {
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
-  const [reopening, setReopening] = useState(false);
-  const [reopenError, setReopenError] = useState<string | null>(null);
 
   function load() {
     setLoading(true);
@@ -58,18 +55,6 @@ export function AuditPage() {
     }
   }
 
-  async function onReopen() {
-    setReopening(true);
-    setReopenError(null);
-    try {
-      await reopenJob(jobId);
-      navigate(paths.jobReview.getHref(jobId));
-    } catch (err) {
-      setReopenError(err instanceof ApiError ? err.detail : 'Failed to reopen this document.');
-      setReopening(false);
-    }
-  }
-
   if (loading) return <LoadingState label="Loading audit trail…" />;
   if (error) return <ErrorBanner message={error} onRetry={load} />;
   if (!job || !rows) return null;
@@ -89,8 +74,13 @@ export function AuditPage() {
           <div className="flex items-center gap-2">
             <StatusBadge status={job.status} />
             {job.status === 'complete' ? (
-              <Button variant="outline" size="sm" disabled={reopening} onClick={onReopen}>
-                {reopening ? 'Reopening…' : 'Reopen for review'}
+              <Button
+                variant="outline"
+                size="sm"
+                asChild
+                title="This document is complete and its source file has been permanently removed. It cannot be reopened for editing."
+              >
+                <Link to={paths.jobReview.getHref(jobId)}>View document</Link>
               </Button>
             ) : (
               <Button variant="outline" size="sm" asChild>
@@ -105,7 +95,6 @@ export function AuditPage() {
       />
 
       {exportError && <ErrorBanner message={exportError} />}
-      {reopenError && <ErrorBanner message={reopenError} />}
 
       {rows.length === 0 ? (
         <div className="rounded-lg border border-border bg-card">

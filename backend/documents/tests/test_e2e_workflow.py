@@ -114,10 +114,12 @@ class FullWorkflowTests(TestCase):
         )
         self.assertEqual(locked_resp.status_code, 409)
 
-        # Reopening unlocks it again.
+        # And permanently so: its source file is gone (purged on
+        # completion), so there's nothing left to reopen and re-finalize.
         reopen_resp = self.client.post(f"/api/jobs/{job_id}/reopen/", {}, format="json")
-        self.assertEqual(reopen_resp.status_code, 200)
-        self.assertEqual(reopen_resp.data["job"]["status"], "in_review")
+        self.assertEqual(reopen_resp.status_code, 409)
+        job = Job.objects.get(pk=job_id)
+        self.assertEqual(job.status, "complete")
 
     def test_upload_rejects_non_pdf(self):
         resp = self.client.post(

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Lock } from 'lucide-react';
-import { ApiError, applyRules, getJob, getRules, reopenJob, updateRule } from '@/api/client';
+import { ApiError, applyRules, getJob, getRules, updateRule } from '@/api/client';
 import type { CategoryRule, Job, Mode } from '@/api/types';
 import { CategoryDot } from '@/components/CategoryBadge';
 import { EmptyState, ErrorBanner, LoadingState } from '@/components/States';
@@ -33,7 +33,6 @@ export function RulesPage() {
   const [error, setError] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
   const [rowError, setRowError] = useState<string | null>(null);
-  const [reopening, setReopening] = useState(false);
 
   function load() {
     setLoading(true);
@@ -82,18 +81,6 @@ export function RulesPage() {
     }
   }
 
-  async function onReopen() {
-    setReopening(true);
-    setError(null);
-    try {
-      await reopenJob(jobId);
-      load();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.detail : 'Failed to reopen this document.');
-      setReopening(false);
-    }
-  }
-
   if (loading) return <LoadingState label="Loading detection rules…" />;
   if (error && !rules) return <ErrorBanner message={error} onRetry={load} />;
   if (!rules || !job) return <EmptyState title="Job not found" />;
@@ -124,11 +111,9 @@ export function RulesPage() {
         <div className="bg-muted text-muted-foreground border-border mb-4.5 flex items-center gap-3 rounded-md border px-3.5 py-3 text-[13px]">
           <Lock className="size-4 shrink-0" aria-hidden="true" />
           <span className="flex-1">
-            This document is complete, so detection rules are locked. Reopen it to change them.
+            This document is complete and permanently locked — its source file has been removed, so
+            detection rules can no longer be changed.
           </span>
-          <Button size="sm" variant="outline" disabled={reopening} onClick={onReopen}>
-            {reopening ? 'Reopening…' : 'Reopen to edit'}
-          </Button>
         </div>
       )}
 

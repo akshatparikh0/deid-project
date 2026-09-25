@@ -425,6 +425,17 @@ class JobCompleteView(APIView):
 class JobReopenView(APIView):
     def post(self, request, job_id):
         job = _job_or_404(job_id)
+        if job.status == "complete":
+            # purge_source_file() (see Job.purge_source_file) deletes the
+            # original PDF and its page-preview images the moment a job
+            # completes — permanently, by design, so PHI isn't retained
+            # any longer than it has to be. There's nothing left to
+            # re-finalize from, so "reopen" can't actually be honored once
+            # a job has reached this state; it's not a transient lock.
+            return Response(
+                {"detail": "This document is complete and its source file has been permanently removed. It cannot be reopened."},
+                status=409,
+            )
         job.status = "in_review"
         job.save(update_fields=["status"])
         return Response({"job": JobSerializer(job).data})

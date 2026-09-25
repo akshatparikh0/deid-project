@@ -8,7 +8,6 @@ import {
   getDocument,
   getJob,
   getRules,
-  reopenJob,
   updateEntity,
 } from '@/api/client';
 import type { Category, DocumentPayload, Entity, Job, Mode } from '@/api/types';
@@ -129,24 +128,9 @@ export function ReviewPage() {
       const { job: updated } = await completeJob(jobId);
       setJob(updated);
       setActiveJob(updated);
-      showToast(`${updated.code} marked complete. Finalized, verified, and the source document has been purged.`);
+      showToast(`${updated.code} marked complete. Finalized, and the source document has been purged.`);
     } catch (err) {
       setActionError(err instanceof ApiError ? err.detail : 'Failed to mark the job complete.');
-    } finally {
-      setLifecycleBusy(false);
-    }
-  }
-
-  async function handleReopen() {
-    setActionError(null);
-    setLifecycleBusy(true);
-    try {
-      const { job: updated } = await reopenJob(jobId);
-      setJob(updated);
-      setActiveJob(updated);
-      showToast(`${updated.code} reopened for review.`);
-    } catch (err) {
-      setActionError(err instanceof ApiError ? err.detail : 'Failed to reopen the job.');
     } finally {
       setLifecycleBusy(false);
     }
@@ -202,11 +186,11 @@ export function ReviewPage() {
             Export
           </Button>
           {isComplete ? (
-            <div className="border-border flex items-center gap-2.25 border-l pl-2.25">
+            <div
+              className="border-border flex items-center gap-2.25 border-l pl-2.25"
+              title="This document is complete and its source file has been permanently removed. It cannot be reopened."
+            >
               <StatusBadge status={job.status} />
-              <Button variant="outline" size="sm" disabled={lifecycleBusy} onClick={handleReopen}>
-                Reopen
-              </Button>
             </div>
           ) : (
             <Button size="sm" disabled={lifecycleBusy} onClick={() => handleComplete()}>
