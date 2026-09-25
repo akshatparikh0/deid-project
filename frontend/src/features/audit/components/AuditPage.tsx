@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ApiError, exportJob, getAudit, getJob, resolveApiUrl } from '@/api/client';
+import { ApiError, exportJob, fetchAuthenticatedBlob, getAudit, getJob } from '@/api/client';
 import type { AuditRow, Job } from '@/api/types';
 import { CategoryBadge } from '@/components/CategoryBadge';
 import { PageHeader } from '@/components/Layout';
@@ -47,7 +47,22 @@ export function AuditPage() {
     try {
       const { files } = await exportJob(jobId, ['csv']);
       const csv = files.find((f) => f.format === 'csv');
-      if (csv) window.open(resolveApiUrl(csv.url), '_blank', 'noreferrer');
+      if (csv) {
+        // A plain window.open()/<a href> hitting the API directly can't
+        // carry the Authorization header the download endpoint requires,
+        // so it just 401s — fetch it as an authenticated blob and save
+        // that instead (see PageImagePane.tsx's fetchAuthenticatedBlob
+        // usage, and ExportModal.tsx's onDownload for the same fix).
+        const blob = await fetchAuthenticatedBlob(csv.url);
+        const objectUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = csv.filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(objectUrl);
+      }
     } catch (err) {
       setExportError(err instanceof ApiError ? err.detail : 'Failed to export the audit CSV.');
     } finally {

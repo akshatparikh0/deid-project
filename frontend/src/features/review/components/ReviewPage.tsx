@@ -212,9 +212,11 @@ export function ReviewPage() {
               Mask all
             </Button>
           )}
-          <Button variant="outline" size="sm" onClick={() => setExportOpen(true)}>
-            Export
-          </Button>
+          {isComplete && (
+            <Button variant="outline" size="sm" onClick={() => setExportOpen(true)}>
+              Export
+            </Button>
+          )}
           {isComplete ? (
             <div
               className="border-border flex items-center gap-2.25 border-l pl-2.25"

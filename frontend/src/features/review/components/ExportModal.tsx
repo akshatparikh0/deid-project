@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ApiError, exportJob, resolveApiUrl } from '@/api/client';
+import { ApiError, exportJob, fetchAuthenticatedBlob } from '@/api/client';
 import type { ExportFile, ExportFormat } from '@/api/types';
 import { ErrorBanner } from '@/components/States';
 import { Button } from '@/components/ui/button';
@@ -25,6 +25,7 @@ export function ExportModal({ jobId, onClose }: { jobId: number; onClose: () => 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [files, setFiles] = useState<ExportFile[] | null>(null);
+  const [downloadingFormat, setDownloadingFormat] = useState<ExportFormat | null>(null);
 
   function toggle(format: ExportFormat) {
     const next = new Set(selected);
@@ -48,6 +49,32 @@ export function ExportModal({ jobId, onClose }: { jobId: number; onClose: () => 
       setError(err instanceof ApiError ? err.detail : 'Export failed. Please try again.');
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function onDownload(file: ExportFile) {
+    // A plain <a href> pointing straight at the API can't carry the
+    // Authorization header the download endpoint requires (TokenAuthentication
+    // has no way to piggyback on a cookie/session here), so a direct
+    // navigation there just 401s — fetch it as an authenticated blob instead
+    // and trigger the save from that, the same way page preview images do
+    // (see PageImagePane.tsx's fetchAuthenticatedBlob usage).
+    setDownloadingFormat(file.format);
+    setError(null);
+    try {
+      const blob = await fetchAuthenticatedBlob(file.url);
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = file.filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.detail : `Failed to download ${file.filename}.`);
+    } finally {
+      setDownloadingFormat(null);
     }
   }
 
@@ -87,13 +114,18 @@ export function ExportModal({ jobId, onClose }: { jobId: number; onClose: () => 
         {files && (
           <div className="flex flex-col gap-2">
             {files.map((file) => (
-              <Button key={file.format} variant="outline" className="h-auto justify-between" asChild>
-                <a href={resolveApiUrl(file.url)} target="_blank" rel="noreferrer">
-                  <span>
-                    Download {file.filename} <span className="text-muted-foreground">({file.format})</span>
-                  </span>
-                  <span aria-hidden="true">&#8595;</span>
-                </a>
+              <Button
+                key={file.format}
+                variant="outline"
+                className="h-auto justify-between"
+                disabled={downloadingFormat === file.format}
+                onClick={() => onDownload(file)}
+              >
+                <span>
+                  {downloadingFormat === file.format ? 'Downloading' : 'Download'} {file.filename}{' '}
+                  <span className="text-muted-foreground">({file.format})</span>
+                </span>
+                <span aria-hidden="true">&#8595;</span>
               </Button>
             ))}
           </div>
