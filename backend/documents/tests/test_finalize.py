@@ -73,6 +73,26 @@ class SuccessfulFinalizationTests(JobCompletionTestCase):
         self.assertEqual(self.job.status, "complete")
         self.assertFalse(self.job.file)
 
+    def test_page_preview_images_survive_completion_as_deidentified_renders(self):
+        # The Review screen's "De-identified output" pane (and the export
+        # flow) both need a page image to show even after the original
+        # upload is gone — completion must replace, not just delete, the
+        # page-preview images.
+        before = list(self.job.page_images.values_list("id", flat=True))
+        self.assertTrue(before)
+
+        resp = self.client.post(f"/api/jobs/{self.job.id}/complete/", {}, format="json")
+        self.assertEqual(resp.status_code, 200, resp.data)
+
+        after = list(self.job.page_images.values_list("id", flat=True))
+        self.assertTrue(after)
+        # New rows, not the same (never-purged) originals.
+        self.assertEqual(set(before) & set(after), set())
+
+        # Just confirm it's a non-trivial PNG, not an empty/broken file.
+        page = self.job.page_images.get(number=1)
+        self.assertGreater(page.image.size, 1000)
+
     def test_finalized_pdf_has_true_redaction_not_a_rebuild(self):
         self.client.post(f"/api/jobs/{self.job.id}/complete/", {}, format="json")
         artifact = ExportArtifact.objects.get(job=self.job, format="pdf")

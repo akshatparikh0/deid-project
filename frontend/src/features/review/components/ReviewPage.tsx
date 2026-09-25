@@ -25,6 +25,13 @@ import { PageImagePane } from './PageImagePane';
 
 type PaneView = 'both' | 'original' | 'deidentified';
 
+// A complete job's page images are already the finalized render (PHI is
+// truly gone from the pixels, not just visually covered) — drawing the
+// usual click-to-select entity overlays on top of it would just double up
+// on (and, for a mask token, visually collide with) coverage that's
+// already baked in, with no interactivity left to justify it.
+const NO_ENTITIES_BY_PAGE = new Map<number, Entity[]>();
+
 export function ReviewPage() {
   const { id } = useParams<{ id: string }>();
   const jobId = Number(id);
@@ -141,12 +148,17 @@ export function ReviewPage() {
   if (!job || !doc) return null;
 
   const isComplete = job.status === 'complete';
-  const showOriginal = paneView !== 'deidentified';
-  const showDeid = paneView !== 'original';
+  // A complete job has no editable entities left (the source PDF is
+  // permanently purged — see Job.purge_source_file) and only the
+  // de-identified output actually matters at that point, so "Original"/
+  // "Both" and the entity inspector have nothing left to offer.
+  const showOriginal = !isComplete && paneView !== 'deidentified';
+  const showDeid = isComplete || paneView !== 'original';
+  const showInspector = !isComplete && inspectorOpen;
   const gridTemplateColumns = [
     showOriginal ? '1fr' : null,
     showDeid ? '1fr' : null,
-    inspectorOpen ? '320px' : null,
+    showInspector ? '320px' : null,
   ]
     .filter(Boolean)
     .join(' ');
@@ -166,22 +178,40 @@ export function ReviewPage() {
         </div>
 
         <div className="ml-auto flex flex-wrap justify-end gap-2.25">
-          <Tabs value={paneView} onValueChange={(v) => setPaneView(v as PaneView)}>
+          <Tabs value={isComplete ? 'deidentified' : paneView} onValueChange={(v) => setPaneView(v as PaneView)}>
             <TabsList>
-              <TabsTrigger value="both">Both</TabsTrigger>
-              <TabsTrigger value="original">Original</TabsTrigger>
+              <TabsTrigger
+                value="both"
+                disabled={isComplete}
+                title={isComplete ? 'Only the de-identified output is available once a document is complete.' : undefined}
+              >
+                Both
+              </TabsTrigger>
+              <TabsTrigger
+                value="original"
+                disabled={isComplete}
+                title={isComplete ? 'The original is permanently removed once a document is complete.' : undefined}
+              >
+                Original
+              </TabsTrigger>
               <TabsTrigger value="deidentified">Output</TabsTrigger>
             </TabsList>
           </Tabs>
-          <Button variant="outline" size="sm" onClick={() => setInspectorOpen((v) => !v)}>
-            {inspectorOpen ? 'Hide entities' : 'Show entities'}
-          </Button>
-          <Button variant="outline" size="sm" disabled={bulkBusy || isComplete} onClick={() => handleBulk('redact')}>
-            Redact all
-          </Button>
-          <Button variant="outline" size="sm" disabled={bulkBusy || isComplete} onClick={() => handleBulk('mask')}>
-            Mask all
-          </Button>
+          {!isComplete && (
+            <Button variant="outline" size="sm" onClick={() => setInspectorOpen((v) => !v)}>
+              {inspectorOpen ? 'Hide entities' : 'Show entities'}
+            </Button>
+          )}
+          {!isComplete && (
+            <Button variant="outline" size="sm" disabled={bulkBusy} onClick={() => handleBulk('redact')}>
+              Redact all
+            </Button>
+          )}
+          {!isComplete && (
+            <Button variant="outline" size="sm" disabled={bulkBusy} onClick={() => handleBulk('mask')}>
+              Mask all
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={() => setExportOpen(true)}>
             Export
           </Button>
@@ -243,14 +273,14 @@ export function ReviewPage() {
             title="De-identified output"
             variant="deidentified"
             pages={doc.pages}
-            entitiesByPage={entitiesByPage}
+            entitiesByPage={isComplete ? NO_ENTITIES_BY_PAGE : entitiesByPage}
             ruleTokenByCategory={ruleTokens}
             selectedCode={selectedCode}
             onSelect={setSelectedCode}
             dimThreshold={dimThreshold}
           />
         )}
-        {inspectorOpen && (
+        {showInspector && (
           <EntityInspector
             entities={entities}
             selectedCode={selectedCode}
@@ -258,7 +288,6 @@ export function ReviewPage() {
             onModeChange={handleModeChange}
             busyId={busyId}
             threshold={dimThreshold}
-            readOnly={isComplete}
           />
         )}
       </div>

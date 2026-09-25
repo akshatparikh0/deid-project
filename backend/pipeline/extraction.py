@@ -771,3 +771,26 @@ def extract_blocks(file_obj, *, force_ocr=False, azure_ocr_enabled=False):
             f"contain an unreadable scanned image.{hint}"
         )
     return page_count, blocks, pages
+
+
+def render_page_images(pdf_bytes):
+    """Rasterizes every page of the given PDF at PREVIEW_RESOLUTION dpi —
+    the same rendering `extract_blocks` above uses for its own page
+    previews, minus everything else it does (no text/table extraction, no
+    OCR). Used to rebuild the Review screen's page-preview images from a
+    *finalized* (redacted) PDF once the original upload is no longer kept
+    around (see Job.purge_source_file), so nothing here ever touches
+    unredacted content.
+
+    Returns a list of {number, width, height, png} dicts, one per page."""
+    pages = []
+    with _PDFIUM_LOCK, pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+        for page_number, page in enumerate(pdf.pages, start=1):
+            preview_image = page.to_image(resolution=PREVIEW_RESOLUTION).original
+            png_buf = io.BytesIO()
+            preview_image.save(png_buf, format="PNG")
+            pages.append({
+                "number": page_number, "width": page.width, "height": page.height,
+                "png": png_buf.getvalue(),
+            })
+    return pages

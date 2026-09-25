@@ -96,19 +96,18 @@ class Job(models.Model):
         return f"{self.code} ({self.filename})"
 
     def purge_source_file(self):
-        """Delete the uploaded source PDF, and the rendered page preview
-        images derived from it, from disk once they're no longer needed for
-        editing — de-identified output and the audit trail don't need
-        either. Page images show the full original page content (that's the
-        point, for the Review screen), so they get purged on the same
-        schedule as the source PDF itself, not kept around indefinitely."""
+        """Delete the uploaded source PDF from disk once it's no longer
+        needed for editing — de-identified output and the audit trail don't
+        need it. Page-preview images are left alone: complete_job() (see
+        documents/complete.py) has already replaced them, in the same
+        transaction that produced this result, with renders of the
+        finalized (redacted) PDF — the Review screen's "De-identified
+        output" pane, and the export flow, both still need those after
+        completion, and they never show original, unredacted content."""
         if self.file:
             self.file.delete(save=False)
             self.file = None
             self.save(update_fields=["file"])
-        for page in self.page_images.all():
-            page.image.delete(save=False)
-        self.page_images.all().delete()
 
 
 class JobStage(models.Model):
